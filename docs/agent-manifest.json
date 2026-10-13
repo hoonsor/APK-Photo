@@ -1,0 +1,980 @@
+{
+  "api": 1,
+  "status": "planned",
+  "app": "照片整理箱",
+  "package": "com.photobox.sorter",
+  "version": "1.1.8",
+  "description": "整理手機照片與影片：虛擬相簿、滑動整理標記保留／待刪、相似照片、分享與備份。完全離線。",
+  "notes": "Agent API 尚未實作；所有動作皆為規劃中。實作前需先改用共用簽章（signature 權限），見 AGENTS.md 坑 15。",
+  "actions": [
+    {
+      "name": "photo_list",
+      "title": "查詢照片",
+      "description": "依條件列出照片與影片（id、檔名、時間、資料夾、大小、整理狀態）",
+      "risk": "read",
+      "params": {
+        "type": "object",
+        "properties": {
+          "filter": {
+            "type": "object",
+            "description": "以條件選取照片，與 ids 二擇一",
+            "properties": {
+              "query": {
+                "type": "string",
+                "description": "檔名、資料夾，或日期 2023 / 2023-07 / 2023-07-15"
+              },
+              "date_from": {
+                "type": "string",
+                "format": "date"
+              },
+              "date_to": {
+                "type": "string",
+                "format": "date"
+              },
+              "state": {
+                "type": "string",
+                "enum": [
+                  "any",
+                  "unsorted",
+                  "kept",
+                  "pending"
+                ]
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "any",
+                  "photo",
+                  "video"
+                ]
+              },
+              "source": {
+                "type": "string",
+                "enum": [
+                  "any",
+                  "screenshot",
+                  "line",
+                  "large"
+                ]
+              },
+              "folder": {
+                "type": "string"
+              },
+              "album": {
+                "type": "string"
+              }
+            }
+          },
+          "sort": {
+            "type": "string",
+            "enum": [
+              "newest",
+              "oldest",
+              "largest"
+            ],
+            "default": "newest"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 500,
+            "default": 50
+          }
+        },
+        "additionalProperties": false
+      },
+      "examples": [
+        "列出昨天拍的照片",
+        "找出 2023 年 7 月的影片",
+        "有哪些從 LINE 存下來的照片"
+      ],
+      "status": "planned"
+    },
+    {
+      "name": "photo_get",
+      "title": "照片詳細資訊",
+      "description": "取得單張的 EXIF、位置（需權限）、所在相簿與完整路徑",
+      "risk": "read",
+      "params": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "id"
+        ]
+      },
+      "examples": [
+        "這張照片是在哪裡拍的",
+        "這張是什麼手機拍的"
+      ],
+      "status": "planned"
+    },
+    {
+      "name": "photo_open",
+      "title": "開啟照片",
+      "description": "在 App 內開啟某張照片的檢視畫面（會回 NEEDS_UI）",
+      "risk": "read",
+      "params": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "id"
+        ]
+      },
+      "examples": [
+        "打開最新的那張照片"
+      ],
+      "status": "planned"
+    },
+    {
+      "name": "stats_get",
+      "title": "整理統計",
+      "description": "照片／影片總數、未整理、已保留、待刪數量與可釋放空間、相簿數",
+      "risk": "read",
+      "params": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "examples": [
+        "我還有多少照片沒整理",
+        "待刪的照片總共多大"
+      ],
+      "status": "planned"
+    },
+    {
+      "name": "folder_list",
+      "title": "列出資料夾",
+      "description": "列出手機上的實體資料夾（相機、截圖、LINE…）與數量",
+      "risk": "read",
+      "params": {
+        "type": "object",
+        "properties": {
+          "limit": {
+            "type": "integer",
+            "default": 50
+          }
+        },
+        "additionalProperties": false
+      },
+      "examples": [
+        "我手機有哪些相片資料夾"
+      ],
+      "status": "planned"
+    },
+    {
+      "name": "album_list",
+      "title": "列出相簿",
+      "description": "列出所有相簿（含喜好項目）與照片、影片數量",
+      "risk": "read",
+      "params": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "examples": [
+        "我有哪些相簿",
+        "列出相簿"
+      ],
+      "status": "planned"
+    },
+    {
+      "name": "album_get",
+      "title": "相簿內容",
+      "description": "列出某本相簿裡的項目",
+      "risk": "read",
+      "params": {
+        "type": "object",
+        "properties": {
+          "album": {
+            "type": "string",
+            "description": "相簿名稱或 id；名稱模糊時回 AMBIGUOUS"
+          },
+          "limit": {
+            "type": "integer",
+            "default": 50
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "album"
+        ]
+      },
+      "examples": [
+        "大陸購物那本相簿有幾張"
+      ],
+      "status": "planned"
+    },
+    {
+      "name": "album_create",
+      "title": "建立相簿",
+      "description": "建立新相簿，可同時放入照片",
+      "risk": "reversible",
+      "params": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 60
+          },
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            },
+            "description": "照片／影片的 media id（由 photo_list 取得）"
+          },
+          "filter": {
+            "type": "object",
+            "description": "以條件選取照片，與 ids 二擇一",
+            "properties": {
+              "query": {
+                "type": "string",
+                "description": "檔名、資料夾，或日期 2023 / 2023-07 / 2023-07-15"
+              },
+              "date_from": {
+                "type": "string",
+                "format": "date"
+              },
+              "date_to": {
+                "type": "string",
+                "format": "date"
+              },
+              "state": {
+                "type": "string",
+                "enum": [
+                  "any",
+                  "unsorted",
+                  "kept",
+                  "pending"
+                ]
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "any",
+                  "photo",
+                  "video"
+                ]
+              },
+              "source": {
+                "type": "string",
+                "enum": [
+                  "any",
+                  "screenshot",
+                  "line",
+                  "large"
+                ]
+              },
+              "folder": {
+                "type": "string"
+              },
+              "album": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "name"
+        ]
+      },
+      "examples": [
+        "建立一本叫「日本旅行」的相簿",
+        "把今天拍的照片建成新相簿「生日會」"
+      ],
+      "status": "planned",
+      "notes": "undo：album_delete（只刪相簿，不刪照片）"
+    },
+    {
+      "name": "album_rename",
+      "title": "重新命名相簿",
+      "description": "改相簿名稱（喜好項目不能改）",
+      "risk": "reversible",
+      "params": {
+        "type": "object",
+        "properties": {
+          "album": {
+            "type": "string",
+            "description": "相簿名稱或 id；名稱模糊時回 AMBIGUOUS"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 60
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "album",
+          "name"
+        ]
+      },
+      "examples": [
+        "把新相簿改名成鹿野苑"
+      ],
+      "status": "planned",
+      "notes": "undo：album_rename 回原名"
+    },
+    {
+      "name": "album_duplicate",
+      "title": "複製相簿",
+      "description": "複製出一本內容相同的新相簿",
+      "risk": "reversible",
+      "params": {
+        "type": "object",
+        "properties": {
+          "album": {
+            "type": "string",
+            "description": "相簿名稱或 id；名稱模糊時回 AMBIGUOUS"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "album"
+        ]
+      },
+      "examples": [
+        "複製一份旅行相簿"
+      ],
+      "status": "planned",
+      "notes": "undo：album_delete 新相簿"
+    },
+    {
+      "name": "album_add_photos",
+      "title": "加入相簿",
+      "description": "把照片放進相簿（不搬檔案，同一張可在多本）",
+      "risk": "reversible",
+      "params": {
+        "type": "object",
+        "properties": {
+          "album": {
+            "type": "string",
+            "description": "相簿名稱或 id；名稱模糊時回 AMBIGUOUS"
+          },
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            },
+            "description": "照片／影片的 media id（由 photo_list 取得）"
+          },
+          "filter": {
+            "type": "object",
+            "description": "以條件選取照片，與 ids 二擇一",
+            "properties": {
+              "query": {
+                "type": "string",
+                "description": "檔名、資料夾，或日期 2023 / 2023-07 / 2023-07-15"
+              },
+              "date_from": {
+                "type": "string",
+                "format": "date"
+              },
+              "date_to": {
+                "type": "string",
+                "format": "date"
+              },
+              "state": {
+                "type": "string",
+                "enum": [
+                  "any",
+                  "unsorted",
+                  "kept",
+                  "pending"
+                ]
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "any",
+                  "photo",
+                  "video"
+                ]
+              },
+              "source": {
+                "type": "string",
+                "enum": [
+                  "any",
+                  "screenshot",
+                  "line",
+                  "large"
+                ]
+              },
+              "folder": {
+                "type": "string"
+              },
+              "album": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "album"
+        ]
+      },
+      "examples": [
+        "把 10 月 7 日的照片加到生日會相簿",
+        "把剛剛那些照片放進喜好項目"
+      ],
+      "status": "planned",
+      "notes": "undo：album_remove_photos 同一批"
+    },
+    {
+      "name": "album_remove_photos",
+      "title": "移出相簿",
+      "description": "把照片從相簿移出（檔案本身不受影響）",
+      "risk": "reversible",
+      "params": {
+        "type": "object",
+        "properties": {
+          "album": {
+            "type": "string",
+            "description": "相簿名稱或 id；名稱模糊時回 AMBIGUOUS"
+          },
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            },
+            "description": "照片／影片的 media id（由 photo_list 取得）"
+          },
+          "filter": {
+            "type": "object",
+            "description": "以條件選取照片，與 ids 二擇一",
+            "properties": {
+              "query": {
+                "type": "string",
+                "description": "檔名、資料夾，或日期 2023 / 2023-07 / 2023-07-15"
+              },
+              "date_from": {
+                "type": "string",
+                "format": "date"
+              },
+              "date_to": {
+                "type": "string",
+                "format": "date"
+              },
+              "state": {
+                "type": "string",
+                "enum": [
+                  "any",
+                  "unsorted",
+                  "kept",
+                  "pending"
+                ]
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "any",
+                  "photo",
+                  "video"
+                ]
+              },
+              "source": {
+                "type": "string",
+                "enum": [
+                  "any",
+                  "screenshot",
+                  "line",
+                  "large"
+                ]
+              },
+              "folder": {
+                "type": "string"
+              },
+              "album": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "album"
+        ]
+      },
+      "examples": [
+        "把截圖從旅行相簿拿掉"
+      ],
+      "status": "planned",
+      "notes": "undo：album_add_photos 同一批"
+    },
+    {
+      "name": "album_set_cover",
+      "title": "設定封面",
+      "description": "指定相簿封面",
+      "risk": "reversible",
+      "params": {
+        "type": "object",
+        "properties": {
+          "album": {
+            "type": "string",
+            "description": "相簿名稱或 id；名稱模糊時回 AMBIGUOUS"
+          },
+          "id": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "album",
+          "id"
+        ]
+      },
+      "examples": [
+        "用這張當相簿封面"
+      ],
+      "status": "planned",
+      "notes": "undo：album_set_cover 回原封面"
+    },
+    {
+      "name": "album_delete",
+      "title": "刪除相簿",
+      "description": "刪除相簿本身；照片與影片不會被刪",
+      "risk": "destructive",
+      "params": {
+        "type": "object",
+        "properties": {
+          "album": {
+            "type": "string",
+            "description": "相簿名稱或 id；名稱模糊時回 AMBIGUOUS"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "album"
+        ]
+      },
+      "examples": [
+        "刪除新相簿這本"
+      ],
+      "status": "planned",
+      "notes": "一律先回 NEEDS_CONFIRMATION；undo 需重建相簿與成員，回傳時附上成員清單"
+    },
+    {
+      "name": "photo_favorite_set",
+      "title": "加入／移出喜好",
+      "description": "把照片加入或移出「喜好項目」",
+      "risk": "reversible",
+      "params": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            },
+            "description": "照片／影片的 media id（由 photo_list 取得）"
+          },
+          "on": {
+            "type": "boolean",
+            "default": true
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "ids"
+        ]
+      },
+      "examples": [
+        "把這張加到喜好"
+      ],
+      "status": "planned",
+      "notes": "undo：photo_favorite_set 反向"
+    },
+    {
+      "name": "photo_mark",
+      "title": "標記整理狀態",
+      "description": "標記為保留、待刪，或清除標記（不會刪檔）",
+      "risk": "reversible",
+      "params": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            },
+            "description": "照片／影片的 media id（由 photo_list 取得）"
+          },
+          "filter": {
+            "type": "object",
+            "description": "以條件選取照片，與 ids 二擇一",
+            "properties": {
+              "query": {
+                "type": "string",
+                "description": "檔名、資料夾，或日期 2023 / 2023-07 / 2023-07-15"
+              },
+              "date_from": {
+                "type": "string",
+                "format": "date"
+              },
+              "date_to": {
+                "type": "string",
+                "format": "date"
+              },
+              "state": {
+                "type": "string",
+                "enum": [
+                  "any",
+                  "unsorted",
+                  "kept",
+                  "pending"
+                ]
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "any",
+                  "photo",
+                  "video"
+                ]
+              },
+              "source": {
+                "type": "string",
+                "enum": [
+                  "any",
+                  "screenshot",
+                  "line",
+                  "large"
+                ]
+              },
+              "folder": {
+                "type": "string"
+              },
+              "album": {
+                "type": "string"
+              }
+            }
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "kept",
+              "pending",
+              "none"
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "state"
+        ]
+      },
+      "examples": [
+        "把上個月的截圖都標成待刪",
+        "這張標成保留",
+        "清除這些照片的標記"
+      ],
+      "status": "planned",
+      "notes": "undo：photo_mark 回各自原狀態"
+    },
+    {
+      "name": "sort_start",
+      "title": "開始滑動整理",
+      "description": "切到整理分頁，從某張或某天開始往舊／往新整理（會回 NEEDS_UI）",
+      "risk": "read",
+      "params": {
+        "type": "object",
+        "properties": {
+          "from_id": {
+            "type": "integer"
+          },
+          "from_date": {
+            "type": "string",
+            "format": "date"
+          },
+          "direction": {
+            "type": "string",
+            "enum": [
+              "older",
+              "newer"
+            ],
+            "default": "older"
+          },
+          "include": {
+            "type": "string",
+            "enum": [
+              "unsorted",
+              "all"
+            ],
+            "default": "unsorted"
+          },
+          "folder": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "examples": [
+        "從 2023 年 7 月開始往新的整理",
+        "整理截圖資料夾"
+      ],
+      "status": "planned"
+    },
+    {
+      "name": "pending_list",
+      "title": "查看待刪清單",
+      "description": "列出待刪清單與可釋放空間",
+      "risk": "read",
+      "params": {
+        "type": "object",
+        "properties": {
+          "limit": {
+            "type": "integer",
+            "default": 50
+          }
+        },
+        "additionalProperties": false
+      },
+      "examples": [
+        "待刪清單有什麼"
+      ],
+      "status": "planned"
+    },
+    {
+      "name": "trash_empty",
+      "title": "清空待刪",
+      "description": "把待刪清單送進系統垃圾桶（或依設定永久刪除），需要系統確認畫面",
+      "risk": "destructive",
+      "params": {
+        "type": "object",
+        "properties": {
+          "permanent": {
+            "type": "boolean",
+            "default": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "examples": [
+        "把待刪的都清掉"
+      ],
+      "status": "planned",
+      "notes": "先回 NEEDS_CONFIRMATION，確認後回 NEEDS_UI（Android 一定要使用者在系統對話框按允許）"
+    },
+    {
+      "name": "photo_move_folder",
+      "title": "移到資料夾",
+      "description": "實際搬移檔案到另一個資料夾，需要系統確認畫面",
+      "risk": "destructive",
+      "params": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            },
+            "description": "照片／影片的 media id（由 photo_list 取得）"
+          },
+          "filter": {
+            "type": "object",
+            "description": "以條件選取照片，與 ids 二擇一",
+            "properties": {
+              "query": {
+                "type": "string",
+                "description": "檔名、資料夾，或日期 2023 / 2023-07 / 2023-07-15"
+              },
+              "date_from": {
+                "type": "string",
+                "format": "date"
+              },
+              "date_to": {
+                "type": "string",
+                "format": "date"
+              },
+              "state": {
+                "type": "string",
+                "enum": [
+                  "any",
+                  "unsorted",
+                  "kept",
+                  "pending"
+                ]
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "any",
+                  "photo",
+                  "video"
+                ]
+              },
+              "source": {
+                "type": "string",
+                "enum": [
+                  "any",
+                  "screenshot",
+                  "line",
+                  "large"
+                ]
+              },
+              "folder": {
+                "type": "string"
+              },
+              "album": {
+                "type": "string"
+              }
+            }
+          },
+          "folder": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "folder"
+        ]
+      },
+      "examples": [
+        "把這些截圖搬到 Pictures/收據"
+      ],
+      "status": "planned",
+      "notes": "先回 NEEDS_CONFIRMATION，再回 NEEDS_UI"
+    },
+    {
+      "name": "photo_share",
+      "title": "分享照片",
+      "description": "開啟系統分享選單分享選取的照片（LINE、Dropbox、雲端硬碟）",
+      "risk": "read",
+      "params": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            },
+            "description": "照片／影片的 media id（由 photo_list 取得）"
+          },
+          "filter": {
+            "type": "object",
+            "description": "以條件選取照片，與 ids 二擇一",
+            "properties": {
+              "query": {
+                "type": "string",
+                "description": "檔名、資料夾，或日期 2023 / 2023-07 / 2023-07-15"
+              },
+              "date_from": {
+                "type": "string",
+                "format": "date"
+              },
+              "date_to": {
+                "type": "string",
+                "format": "date"
+              },
+              "state": {
+                "type": "string",
+                "enum": [
+                  "any",
+                  "unsorted",
+                  "kept",
+                  "pending"
+                ]
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "any",
+                  "photo",
+                  "video"
+                ]
+              },
+              "source": {
+                "type": "string",
+                "enum": [
+                  "any",
+                  "screenshot",
+                  "line",
+                  "large"
+                ]
+              },
+              "folder": {
+                "type": "string"
+              },
+              "album": {
+                "type": "string"
+              }
+            }
+          },
+          "album": {
+            "type": "string",
+            "description": "分享整本相簿"
+          }
+        },
+        "additionalProperties": false
+      },
+      "examples": [
+        "把生日會相簿分享到 LINE",
+        "分享今天拍的照片"
+      ],
+      "status": "planned",
+      "notes": "回 NEEDS_UI（分享選單需使用者選目標）"
+    },
+    {
+      "name": "duplicate_scan",
+      "title": "找相似照片",
+      "description": "開啟重複／相似照片掃描畫面",
+      "risk": "read",
+      "params": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "examples": [
+        "幫我找重複的照片"
+      ],
+      "status": "planned",
+      "notes": "回 NEEDS_UI"
+    },
+    {
+      "name": "backup_export",
+      "title": "匯出備份",
+      "description": "把相簿、喜好與整理標記匯出成備份檔",
+      "risk": "reversible",
+      "params": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "examples": [
+        "備份我的相簿"
+      ],
+      "status": "planned",
+      "notes": "目前需使用者在檔案選擇器選位置，回 NEEDS_UI；未來若做自動備份可直接寫入已授權的檔案"
+    },
+    {
+      "name": "backup_import",
+      "title": "從備份還原",
+      "description": "從備份檔合併還原相簿與標記",
+      "risk": "destructive",
+      "params": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "examples": [
+        "從備份還原相簿"
+      ],
+      "status": "planned",
+      "notes": "先回 NEEDS_CONFIRMATION，再回 NEEDS_UI（選檔）"
+    }
+  ]
+}

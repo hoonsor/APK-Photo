@@ -32,7 +32,7 @@
 | 權限 | `READ_MEDIA_IMAGES`、`READ_MEDIA_VIDEO`、`READ_MEDIA_VISUAL_USER_SELECTED`、`ACCESS_MEDIA_LOCATION`、`VIBRATE`、`READ_EXTERNAL_STORAGE`（maxSdk 32）。**沒有網路權限** |
 | 規模 | 35 個 Java 類別、約 9,400 行 |
 | 測試裝置 | OPPO Reno14F／Android 15／ColorOS（開發端無法連接實機，全靠倬回報） |
-| repo | `hoonsor/APK-Photo`（public）。程式碼工作資料夾為 **`D:\dev\APK-Photo`**（全英文路徑，方便建置與安裝手機測試）。`D:-Project-手機照片APP` 只放筆記、舊快照（`photobox/`）、舊簽章與交付的 APK，不在那裡建置 |
+| repo | `hoonsor/APK-Photo`（public）。程式碼工作資料夾為 **`D:\dev\APK-Photo`**（全英文路徑，方便建置與安裝手機測試）。`D:\01-Project\30-手機照片APP` 只放筆記、舊快照（`photobox/`）、舊簽章與交付的 APK，不在那裡建置 |
 
 ## 3. 建置與安裝
 
@@ -43,7 +43,7 @@ PB_KS_PASS=<密碼> bash build.sh --lab # LAB 版 → build/photo-sort-box-lab.a
 bash tests/run.sh                   # 純邏輯測試（Flow／BackupMatch／Geo），不需要 Android
 ```
 
-- **簽章金鑰不在 repo 裡。** `keystore.p12` 只存在倬的電腦（`D:-Project-手機照片APP\photobox\keystore.p12`，勿刪）。
+- **簽章金鑰不在 repo 裡。** `keystore.p12` 只存在倬的電腦（`D:\01-Project\30-手機照片APP\photobox\keystore.p12`，勿刪）。
   建置前把它放到專案根目錄，或用 `PB_KEYSTORE=<路徑>` 指定。密碼向倬索取，**不要寫進任何檔案**。
 - 找不到金鑰時 `build.sh` 會**停下來**，不會自動產生新的（見第 7 節坑 14）。
 - `--lab`：應用 ID 加 `.lab`、名稱加「LAB」，可和正式版同時安裝、資料完全隔離。

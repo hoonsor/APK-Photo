@@ -13,7 +13,7 @@
 | 支援 | Android 11（API 30）以上，targetSdk 34 |
 | 建置 | aapt2＋ecj＋d8＋apksigner（純 Android Framework，無 AndroidX），見 `AGENTS.md` 第 3 節 |
 | repo | `hoonsor/APK-Photo`，2026-10-13 第一次提交（之前的版本沒有 git 紀錄） |
-| 程式碼位置 | **`D:\dev\APK-Photo`**（全英文路徑；`D:-Project-手機照片APP` 只放筆記、舊快照與 APK） |
+| 程式碼位置 | **`D:\dev\APK-Photo`**（全英文路徑；`D:\01-Project\30-手機照片APP` 只放筆記、舊快照與 APK） |
 | 安裝檔 | 倬電腦 `30-手機照片APP` 資料夾內的 `照片整理箱_v1.1.8.apk`／`照片整理箱_LAB_v1.1.8.apk`（不放 repo） |
 
 ## 任務勾選

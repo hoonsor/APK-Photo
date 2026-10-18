@@ -13,6 +13,7 @@
 | 支援 | Android 11（API 30）以上，targetSdk 34 |
 | 建置 | aapt2＋ecj＋d8＋apksigner（純 Android Framework，無 AndroidX），見 `AGENTS.md` 第 3 節 |
 | repo | `hoonsor/APK-Photo`，2026-10-13 第一次提交（之前的版本沒有 git 紀錄） |
+| 程式碼位置 | **`D:\dev\APK-Photo`**（全英文路徑；`D:-Project-手機照片APP` 只放筆記、舊快照與 APK） |
 | 安裝檔 | 倬電腦 `30-手機照片APP` 資料夾內的 `照片整理箱_v1.1.8.apk`／`照片整理箱_LAB_v1.1.8.apk`（不放 repo） |
 
 ## 任務勾選
@@ -37,7 +38,8 @@ commit 欄：2026-10-13 之前沒有 git，標「—」。
 
 | 版本 | 日期 | commit | 變更 | 為什麼 |
 |---|---|---|---|---|
-| docs | 2026-10-13 | 本次提交（docs: 補齊交接文件與使用說明） | AGENTS.md、README 使用說明、docs/AGENT_API、build.sh 改讀環境變數 | 讓其他 AI 不看對話紀錄也能接手；repo 公開不能放密碼 |
+| docs | 2026-10-18 | 本次提交（docs: 更新程式碼位置） | AGENTS.md D16、PROJECT_STATUS 改寫為程式碼在 `D:\dev\APK-Photo` | 文件仍寫「暫不搬家」，與現況不符 |
+| docs | 2026-10-13 | 20156c5（docs: 補齊交接文件與使用說明） | AGENTS.md、README 使用說明、docs/AGENT_API、build.sh 改讀環境變數 | 讓其他 AI 不看對話紀錄也能接手；repo 公開不能放密碼 |
 | v1.1.8 | 2026-10-09 | — | 整理頁上方「從某張開始」＋挑選畫面 | 原本要進來源選單最下面再跳照片頁，太慢 |
 | v1.1.7 | 2026-10-09 | — | 日期格字級、勾選圓圈依格子大小縮放 | 6 欄時日期字被切掉、圓圈太大（倬截圖） |
 | v1.1.6 | 2026-10-09 | — | 往右滑進入相簿整理、相簿欄滑入動畫；拖曳外框不再被裁 | 倬要求一滑就能整理；外框被遮住 |
@@ -84,7 +86,7 @@ commit 欄：2026-10-13 之前沒有 git，標「—」。
 ## 下一步
 
 1. **等倬決定**：自動備份頻率；AI 判斷待刪的做法（a 正式版加網路權限／b 另出 AI 版／c 離線模糊偵測）與 AI 建議放哪裡。
-2. 換成共用簽章＋GitHub Actions（先在 App 內匯出備份 → 卸載 → 安裝新簽章版 → 匯入），順便搬到 標準骨架的英文路徑 `dev/APK-Photo`。
+2. 換成共用簽章＋GitHub Actions（先在 App 內匯出備份 → 卸載 → 安裝新簽章版 → 匯入）。（程式碼已在 `D:\dev\APK-Photo`）
 3. 實作 Agent API：先做 read 類（`photo_list`、`album_list`、`stats_get`），再做 reversible 類。
 4. 備份補齊標準四件套（zip、分享、存檔、匯入前自動備份）與健康檢查頁。
 5. 原功能待辦見下方「功能待辦」。
@@ -93,6 +95,7 @@ commit 欄：2026-10-13 之前沒有 git，標「—」。
 
 | 日期 | 電腦 | 完成 | 決定＋原因 | 放棄＋原因 | 未完成 | 下一步 | 環境注意事項 |
 |---|---|---|---|---|---|---|---|
+| 2026-10-18 | A（家裡） | 文件改為程式碼在 `D:\dev\APK-Photo` | 英文路徑方便建置與安裝手機測試；D16 改寫 | — | 中文資料夾 CLAUDE.md 寫「push tag 由 GitHub Actions 發布」，但 repo 尚無 workflow | 見上方「下一步」 | 建置在 `D:\dev\APK-Photo`；keystore.p12 仍在 `30-手機照片APP\photobox\` |
 | 2026-10-09 | 原因待倬確認（雲端開發環境，連結倬的電腦） | v1.1.0～v1.1.8 | 虛擬相簿（參考 App 的模型）；深色外觀（倬偏好）；備份走 SAF（不需網路） | 內嵌地圖、Drive/Dropbox API（都需要網路權限）；好友、QR（需帳號／相機） | 自動備份、AI 判斷（等決定） | 倬實機驗證 | 雲端環境只能用 npm 工具鏈；簽章金鑰存在倬電腦 |
 | 2026-10-13 | A（家裡） | 補齊 AGENTS.md、README、docs/AGENT_API、manifest；第一次推上 `hoonsor/APK-Photo`；build.sh 改讀 `PB_KS_PASS` | 金鑰與密碼不進 repo（repo 公開）；repo 根目錄＝原 photobox 內容；程式暫不搬到 dev/APK-Photo（不用 Gradle） | 立即換共用簽章（要卸載重裝） | Agent API、共用簽章 | 見上方「下一步」 | 建置前要把 keystore.p12 放到專案根目錄並設定 PB_KS_PASS |
 

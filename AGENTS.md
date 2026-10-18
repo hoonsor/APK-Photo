@@ -32,7 +32,7 @@
 | 權限 | `READ_MEDIA_IMAGES`、`READ_MEDIA_VIDEO`、`READ_MEDIA_VISUAL_USER_SELECTED`、`ACCESS_MEDIA_LOCATION`、`VIBRATE`、`READ_EXTERNAL_STORAGE`（maxSdk 32）。**沒有網路權限** |
 | 規模 | 35 個 Java 類別、約 9,400 行 |
 | 測試裝置 | OPPO Reno14F／Android 15／ColorOS（開發端無法連接實機，全靠倬回報） |
-| repo | `hoonsor/APK-Photo`（public）。倬電腦上的工作資料夾為 `30-手機照片APP`（中文路徑；本專案不用 Gradle，不受影響） |
+| repo | `hoonsor/APK-Photo`（public）。程式碼工作資料夾為 **`D:\dev\APK-Photo`**（全英文路徑，方便建置與安裝手機測試）。`D:-Project-手機照片APP` 只放筆記、舊快照（`photobox/`）、舊簽章與交付的 APK，不在那裡建置 |
 
 ## 3. 建置與安裝
 
@@ -43,7 +43,7 @@ PB_KS_PASS=<密碼> bash build.sh --lab # LAB 版 → build/photo-sort-box-lab.a
 bash tests/run.sh                   # 純邏輯測試（Flow／BackupMatch／Geo），不需要 Android
 ```
 
-- **簽章金鑰不在 repo 裡。** `keystore.p12` 只存在倬的電腦（`30-手機照片APP/photobox/keystore.p12`）。
+- **簽章金鑰不在 repo 裡。** `keystore.p12` 只存在倬的電腦（`D:-Project-手機照片APP\photobox\keystore.p12`，勿刪）。
   建置前把它放到專案根目錄，或用 `PB_KEYSTORE=<路徑>` 指定。密碼向倬索取，**不要寫進任何檔案**。
 - 找不到金鑰時 `build.sh` 會**停下來**，不會自動產生新的（見第 7 節坑 14）。
 - `--lab`：應用 ID 加 `.lab`、名稱加「LAB」，可和正式版同時安裝、資料完全隔離。
@@ -191,7 +191,7 @@ album_items(album_id, media_id, ts, PRIMARY KEY(album_id, media_id))
 | D13 | 「從某張開始整理」一次選完方向與範圍（4 選項），整理頁上方有直接按鈕 | 倬要求往新、往舊都能整理，且原本要點來源選單到最下面太慢 | 只能往舊、依該張狀態自動決定範圍（畫面看不出來，容易混淆） |
 | D14 | 簽章用專案自帶的 `keystore.p12`，暫不改用共用簽章 `hoonsor-release.jks`／GitHub Actions | 換簽章手機要卸載重裝，卸載會清掉相簿與整理進度；2026-10-13 倬選擇暫不換 | 立即改用共用簽章（之後要做，見 PROJECT_STATUS 下一步） |
 | D15 | 簽章密碼改由環境變數 `PB_KS_PASS` 提供；找不到金鑰時停止 | repo 是公開的，不能放密碼（2026-10-13 倬決定）；自動產生新金鑰曾造成 v1.0.6→v1.1.0 必須卸載 | 密碼寫死在 build.sh |
-| D16 | 程式碼暫不搬到 標準骨架的英文路徑 `dev/APK-Photo` | 本專案不用 Gradle，中文路徑沒問題；2026-10-13 倬選擇等改共用簽章時再一起搬 | 依標準骨架立即搬家 |
+| D16 | 程式碼放在英文路徑 `D:\dev\APK-Photo`，中文資料夾只留筆記與舊快照 | 方便建置與安裝手機測試，並與其他 APK 專案的標準骨架一致（2026-10-18 確認已搬家；原 2026-10-13 決定暫不搬已取消） | 繼續在中文路徑 `30-手機照片APP` 開發 |
 | D17 | 相簿內頁不提供「從這本相簿開始整理」 | 整理來源目前只支援資料夾與年月，硬做會從全部照片接續，名不符實 | 曾短暫加入選單後移除 |
 | D18 | 單張檢視下方按鈕改為 資訊／喜好／加入相簿／分享／刪除，保留／待刪移到 ⋮ | 對齊參考 App 的四顆按鈕；原本五個整理動作放不下 | — |
 | D19 | 刪除在檢視器可選「加入待刪」或「立即移到系統垃圾桶」 | 兩種習慣都保留；仍一律走系統確認 | — |

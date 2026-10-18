@@ -125,13 +125,35 @@ public class SettingsPage extends Page {
         root.addView(card3, Ui.lpW());
         root.addView(Ui.space(a, 14));
 
+        // ---- App 更新 ----
+        LinearLayout card5 = card();
+        card5.addView(sectionTitle("App 更新", "每天第一次開啟時自動檢查一次"));
+        card5.addView(Ui.tv(a, "目前版本 v" + Updater.currentVersion(a), 13.5f, T.DIM, false), Ui.lpW());
+        card5.addView(Ui.space(a, 10));
+        final TextView updateStatus = Ui.tv(a, "", 13f, T.DIM, false);
+        updateStatus.setVisibility(View.GONE);
+        final TextView checkBtn = Ui.btnGhost(a, "檢查更新", T.PRIMARY);
+        checkBtn.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { checkUpdate(checkBtn, updateStatus); }
+        });
+        card5.addView(checkBtn, Ui.lpW());
+        card5.addView(Ui.space(a, 8));
+        card5.addView(updateStatus, Ui.lpW());
+        TextView updNote = Ui.tv(a,
+                "新版從 GitHub 下載後由系統安裝，相簿與整理進度都會保留。"
+              + "網路只用來檢查與下載更新，照片不會經過網路。", 12f, T.FAINT, false);
+        updNote.setLineSpacing(Ui.dp(a, 2), 1f);
+        card5.addView(updNote, Ui.lpW());
+        root.addView(card5, Ui.lpW());
+        root.addView(Ui.space(a, 14));
+
         // ---- 關於 ----
         LinearLayout card4 = card();
         card4.addView(sectionTitle("關於", null));
-        card4.addView(Ui.tv(a, "照片整理箱　v1.1.8", 14f, T.TEXT, true), Ui.lpW());
+        card4.addView(Ui.tv(a, "照片整理箱　v" + Updater.currentVersion(a), 14f, T.TEXT, true), Ui.lpW());
         card4.addView(Ui.space(a, 6));
         TextView about = Ui.tv(a,
-                "所有運算都在這支手機上完成，沒有網路權限，照片不會被上傳到任何地方。\n\n"
+                "所有運算都在這支手機上完成，照片不會被上傳到任何地方；網路權限只用來檢查與下載 App 更新。\n\n"
               + "刪除一律透過 Android 系統的確認流程，App 自己無法偷偷刪除你的檔案。\n\n"
               + "相簿只是整理用的清單，不會搬動或複製檔案。", 13f, T.DIM, false);
         about.setLineSpacing(Ui.dp(a, 4), 1f);
@@ -140,6 +162,34 @@ public class SettingsPage extends Page {
 
         rebuildGestures();
         return sv;
+    }
+
+    private void checkUpdate(final TextView btn, final TextView status) {
+        btn.setEnabled(false);
+        status.setVisibility(View.VISIBLE);
+        status.setTextColor(T.DIM);
+        status.setText("檢查中…");
+        final android.content.Context app = a.getApplicationContext();
+        new Thread(new Runnable() {
+            @Override public void run() {
+                final Updater.Result r = Updater.check(app);
+                a.runOnUiThread(new Runnable() {
+                    @Override public void run() {
+                        btn.setEnabled(true);
+                        if (r.release != null) {
+                            status.setVisibility(View.GONE);
+                            UpdateDialog.show(a, r.release, false);
+                        } else if (r.error != null) {
+                            status.setTextColor(T.MOVE);
+                            status.setText("無法檢查更新：" + r.error);
+                        } else {
+                            status.setTextColor(T.KEEP);
+                            status.setText("已經是最新版");
+                        }
+                    }
+                });
+            }
+        }, "update-check").start();
     }
 
     private LinearLayout card() {

@@ -1,20 +1,28 @@
 # 照片整理箱（Photo Sort Box）— 專案狀態
 
 以滑動手勢整理相片，並把「找回舊照片」做成一等公民功能的 Android App。
-完全離線、無網路權限、刪除一律走 Android 系統確認流程。
+照片完全不經過網路（網路權限只用於 App 內更新，v1.2.0 起）、刪除一律走 Android 系統確認流程。
 接手開發請先讀 `AGENTS.md`；使用說明在 `README.md`。
 
 ## 目前版本
 
 | 項目 | 內容 |
 |---|---|
-| 版本 | **v1.1.8**（versionCode 10108），2026-10-09 |
+| 版本 | **v1.2.0**（versionCode 10200），2026-10-18 |
 | 套件 | `com.photobox.sorter`（LAB：`com.photobox.sorter.lab`） |
 | 支援 | Android 11（API 30）以上，targetSdk 34 |
-| 建置 | aapt2＋ecj＋d8＋apksigner（純 Android Framework，無 AndroidX），見 `AGENTS.md` 第 3 節 |
+| 建置 | aapt2＋ecj／javac＋d8＋apksigner（純 Android Framework，無 AndroidX，不用 Gradle），見 `AGENTS.md` 第 3 節；GitHub Actions 自動發布 |
 | repo | `hoonsor/APK-Photo`，2026-10-13 第一次提交（之前的版本沒有 git 紀錄） |
 | 程式碼位置 | **`D:\dev\APK-Photo`**（全英文路徑；`D:\01-Project\30-手機照片APP` 只放筆記、舊快照與 APK） |
-| 安裝檔 | 倬電腦 `30-手機照片APP` 資料夾內的 `照片整理箱_v1.1.8.apk`／`照片整理箱_LAB_v1.1.8.apk`（不放 repo） |
+| 安裝檔 | v1.2.0 起在 [GitHub Releases](https://github.com/hoonsor/APK-Photo/releases)（`PhotoSortBox-vX.Y.Z.apk`，共用金鑰簽章）；v1.1.8 以前的在倬電腦 `30-手機照片APP` 資料夾 |
+
+## 發布與手機端更新
+
+- 發新版：改 `AndroidManifest.xml` 的 `versionCode`／`versionName` → 在「版本詳細紀錄」最上面新增 `### vX.Y.Z — 日期` 段落（會成為 Release 更新說明）→ 推送 main 與同名 `vX.Y.Z` tag。CI 會檢查 tag 與 versionName 一致、跑 `tests/run.sh`、用 `build.sh` 打包並發布 `PhotoSortBox-vX.Y.Z.apk`。
+- 推送 main 會自動更新 `latest` 預先發行版（測試用，App 內更新與 Obtainium 不會追它）。
+- 手機端：App 內更新（每天第一次開啟自動檢查、「更多 → 設定 → App 更新」手動檢查）或 Obtainium（來源 `https://github.com/hoonsor/APK-Photo`，不要勾 prereleases）。詳細步驟見 README「手機端更新」。
+- 簽章：共用金鑰 `hoonsor-release.jks`，Secrets 已寫入。憑證 SHA-256 `514ec00eea070dd3e67b4f6a0c722c9c779497bb0797e7a3446fcca4e4548825`。
+- 從 v1.1.8（舊金鑰）換到 v1.2.0：先在 App 內匯出備份 → 卸載 → 安裝 v1.2.0 → 匯入備份（只需一次）。
 
 ## 任務勾選
 
@@ -27,7 +35,7 @@
 - [x] 往右滑開相簿欄（v1.1.6）、圖示等比例縮放（v1.1.7）、整理頁「從某張開始」（v1.1.8）
 - [x] 交接文件與使用說明補齊、推上 GitHub（2026-10-13，docs）
 - [ ] Agent API（`describe`／`execute`／`health`）——全部動作規劃中，見 `docs/AGENT_API.md`
-- [ ] 改用共用簽章 `hoonsor-release.jks`＋GitHub Actions 建置（Agent API 的前提，會需要卸載重裝）
+- [x] 改用共用簽章 `hoonsor-release.jks`＋GitHub Actions 建置發布、App 內更新（v1.2.0，2026-10-18）
 - [ ] 定期自動備份到雲端硬碟／Dropbox（等倬決定）
 - [ ] AI（MiniMax M3）輔助判斷待刪照片（等倬決定）
 - [ ] 健康檢查頁、備份改 zip 格式與「分享備份檔」（倬 APP 標準要求，尚未做）
@@ -38,6 +46,7 @@ commit 欄：2026-10-13 之前沒有 git，標「—」。
 
 | 版本 | 日期 | commit | 變更 | 為什麼 |
 |---|---|---|---|---|
+| v1.2.0 | 2026-10-18 | 本次提交 | 共用簽章＋GitHub Actions 發布；App 內更新（新增 INTERNET、REQUEST_INSTALL_PACKAGES 權限，只用於更新） | 倬要手機不接線就能更新；Agent API 需要共用簽章 |
 | docs | 2026-10-18 | 本次提交（docs: 更新程式碼位置） | AGENTS.md D16、PROJECT_STATUS 改寫為程式碼在 `D:\dev\APK-Photo` | 文件仍寫「暫不搬家」，與現況不符 |
 | docs | 2026-10-13 | 20156c5（docs: 補齊交接文件與使用說明） | AGENTS.md、README 使用說明、docs/AGENT_API、build.sh 改讀環境變數 | 讓其他 AI 不看對話紀錄也能接手；repo 公開不能放密碼 |
 | v1.1.8 | 2026-10-09 | — | 整理頁上方「從某張開始」＋挑選畫面 | 原本要進來源選單最下面再跳照片頁，太慢 |
@@ -80,13 +89,13 @@ commit 欄：2026-10-13 之前沒有 git，標「—」。
 - 少數影片格式（部分 HEVC／10-bit HDR）內建播放器不支援，會改用外部播放器
 - 移到資料夾依賴 `RELATIVE_PATH` 更新，少數機型可能被系統拒絕
 - 系統垃圾桶只能清除本 App 送進去的項目（平台限制）
-- 簽章與倬的 APP 標準不同（自帶金鑰），Agent API 實作前必須先換（見 `AGENTS.md` 坑 15）
+- 倬的手機還是 v1.1.8（舊金鑰），要做一次「備份 → 卸載 → 安裝 v1.2.0 → 匯入」才能開始用 App 內更新
 - 備份格式是單一 JSON，不是標準要求的 zip，也還沒有「分享備份檔」與「匯入前自動備份」
 
 ## 下一步
 
 1. **等倬決定**：自動備份頻率；AI 判斷待刪的做法（a 正式版加網路權限／b 另出 AI 版／c 離線模糊偵測）與 AI 建議放哪裡。
-2. 換成共用簽章＋GitHub Actions（先在 App 內匯出備份 → 卸載 → 安裝新簽章版 → 匯入）。（程式碼已在 `D:\dev\APK-Photo`）
+2. 推 `v1.2.0` tag 發布；倬在手機上換裝（先在 App 內匯出備份 → 卸載 → 安裝 v1.2.0 → 匯入），並實測一次 App 內更新。
 3. 實作 Agent API：先做 read 類（`photo_list`、`album_list`、`stats_get`），再做 reversible 類。
 4. 備份補齊標準四件套（zip、分享、存檔、匯入前自動備份）與健康檢查頁。
 5. 原功能待辦見下方「功能待辦」。
@@ -95,11 +104,21 @@ commit 欄：2026-10-13 之前沒有 git，標「—」。
 
 | 日期 | 電腦 | 完成 | 決定＋原因 | 放棄＋原因 | 未完成 | 下一步 | 環境注意事項 |
 |---|---|---|---|---|---|---|---|
+| 2026-10-18 | A（家裡） | v1.2.0：共用簽章、GitHub Actions、App 內更新（Java 版，移植自鬧鐘 APP） | 倬決定：換共用金鑰（一次性重裝）、加 INTERNET 只用於更新；build.sh 支援 Android SDK 工具鏈（build-tools 36.0.0） | 只開瀏覽器到 Releases（倬選完整 App 內更新）；build-tools 34.0.0（d8 NPE） | 推 tag、手機換裝與實測更新 | 見上方「下一步」 | 本機建置：`ANDROID_HOME` 指向 Android SDK、JDK 用 `C:/Users/hoonsor/.jdks/jbr-21.0.11` |
 | 2026-10-18 | A（家裡） | 文件改為程式碼在 `D:\dev\APK-Photo` | 英文路徑方便建置與安裝手機測試；D16 改寫 | — | 中文資料夾 CLAUDE.md 寫「push tag 由 GitHub Actions 發布」，但 repo 尚無 workflow | 見上方「下一步」 | 建置在 `D:\dev\APK-Photo`；keystore.p12 仍在 `30-手機照片APP\photobox\` |
 | 2026-10-09 | 原因待倬確認（雲端開發環境，連結倬的電腦） | v1.1.0～v1.1.8 | 虛擬相簿（參考 App 的模型）；深色外觀（倬偏好）；備份走 SAF（不需網路） | 內嵌地圖、Drive/Dropbox API（都需要網路權限）；好友、QR（需帳號／相機） | 自動備份、AI 判斷（等決定） | 倬實機驗證 | 雲端環境只能用 npm 工具鏈；簽章金鑰存在倬電腦 |
 | 2026-10-13 | A（家裡） | 補齊 AGENTS.md、README、docs/AGENT_API、manifest；第一次推上 `hoonsor/APK-Photo`；build.sh 改讀 `PB_KS_PASS` | 金鑰與密碼不進 repo（repo 公開）；repo 根目錄＝原 photobox 內容；程式暫不搬到 dev/APK-Photo（不用 Gradle） | 立即換共用簽章（要卸載重裝） | Agent API、共用簽章 | 見上方「下一步」 | 建置前要把 keystore.p12 放到專案根目錄並設定 PB_KS_PASS |
 
 ## 版本詳細紀錄（每版做了什麼、為什麼）
+
+### v1.2.0 — 2026-10-18
+**免接線更新：改用共用簽章、GitHub Actions 自動發布，並加上 App 內更新。**
+
+為什麼：之前每次更新都要把 APK 傳到手機手動安裝；共用簽章也是日後 Agent API 與其他 APP 互通的前提。
+
+- 每天第一次開啟時在背景檢查 GitHub 最新正式版；「更多 → 設定」新增「App 更新」可手動檢查。確認後下載 APK，交給系統安裝，相簿與整理進度都保留。
+- 新增網路與「安裝不明應用程式」權限，只用於檢查與下載更新；照片、相簿、位置都不會經過網路。
+- 簽章換成共用金鑰：從 v1.1.8 更新要先在「備份與還原」匯出備份、解除安裝、安裝這一版，再匯入備份（只需一次）。
 
 ### v1.1.8 — 2026-10-09
 **整理頁上方新增「從某張開始」按鈕。**

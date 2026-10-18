@@ -17,7 +17,7 @@
 
 ## 隱私
 
-- 沒有網路權限，程式裡沒有任何連線；照片不會被上傳到任何地方
+- 照片不會被上傳到任何地方：網路權限只用來向 GitHub 檢查與下載 App 更新（v1.2.0 起），照片、相簿、位置都不會經過網路
 - 相似照片的比對全部在手機上完成
 - App 自己無法刪除檔案，刪除一律交給 Android 系統的確認畫面，預設先進系統垃圾桶（30 天內可救回）
 
@@ -25,13 +25,13 @@
 
 ### 1. 安裝 APK（ColorOS）
 
-1. 把 `照片整理箱_vX.Y.Z.apk` 傳到手機（例如用 LINE 傳給自己，或放在雲端硬碟再下載）。
+1. 用手機瀏覽器打開 [Releases](https://github.com/hoonsor/APK-Photo/releases)，下載最新的 `PhotoSortBox-vX.Y.Z.apk`（或用 Obtainium，見下方「手機端更新」）。
 2. 用「檔案管理」點開 APK。第一次會詢問是否允許這個來源安裝 → 允許。
 3. ColorOS 可能跳出安全檢查（例如「來自外部來源的應用程式」），選「繼續安裝」或「仍要安裝」。
 4. 選單名稱依 ColorOS 版本可能略有不同；若找不到，到「設定」搜尋「安裝未知應用程式」，替檔案管理開啟允許。
 
-**更新**：新版直接點 APK 覆蓋安裝即可，相簿與整理進度都會保留。
-**LAB 版**（`照片整理箱_LAB_vX.Y.Z.apk`，名稱顯示「照片整理箱 LAB」）是測試新功能用的，可和正式版同時安裝，資料互不影響。
+**更新**：用 App 內更新或 Obtainium，不用接線，見下方「手機端更新」。相簿與整理進度都會保留。
+**LAB 版**（`build.sh --lab` 產生，名稱顯示「照片整理箱 LAB」）是測試新功能用的，可和正式版同時安裝，資料互不影響。
 
 > 若安裝時出現「與現有的套件衝突」之類的訊息，代表簽章換過，必須先卸載舊版。
 > **卸載會清掉相簿與整理進度**，請先到「更多 → 備份與還原」匯出備份，裝好新版再匯入。
@@ -46,6 +46,30 @@
 
 想看照片的拍攝地點時，在照片資訊的「位置」分頁按「允許讀取照片位置」。
 Android 預設會把照片裡的 GPS 藏起來，必須另外允許。
+
+## 手機端更新（不用接線）
+
+v1.2.0 起，正式版由 GitHub Actions 編譯、用共用金鑰 `hoonsor-release.jks` 簽章，發布在 [Releases](https://github.com/hoonsor/APK-Photo/releases)。手機有兩種更新方式，擇一或並用：
+
+**App 內更新（建議）**
+- 每天第一次開啟 App 時在背景檢查一次；有新版會跳出版本號與更新說明，可選「下載並更新」「稍後」或「略過此版」。
+- 「更多 → 設定」裡的「App 更新」可隨時按「檢查更新」。
+- 第一次更新時會引導你到「安裝不明應用程式」允許本 App，按返回鍵回到 App 後自動開始下載。
+- 沒網路或 GitHub 無法連線時安靜略過，不影響整理。
+- 更新完成後相簿與整理進度都會保留。
+
+**Obtainium 設定**
+1. 在手機安裝 [Obtainium](https://github.com/ImranR98/Obtainium/releases)。
+2. 「Add App」→ App Source URL 填 `https://github.com/hoonsor/APK-Photo`。
+3. 保持「Include prereleases」關閉（`latest` 是每次推送 main 自動編譯的測試版，不要追它）。
+4. 若同一個 Release 未來有多個 APK，在「Filter APKs by Regular Expression」填 `PhotoSortBox-v.*\.apk`。
+5. 新增後 Obtainium 會定期檢查，有新版時通知並一鍵安裝。
+
+**從 v1.1.8 以前換到 v1.2.0（只需一次）**：v1.1.8 以前用的是舊金鑰 `keystore.p12`，v1.2.0 起換成共用金鑰，系統不允許直接覆蓋安裝。
+1. 在舊版「更多 → 備份與還原」**匯出備份**，存到雲端硬碟或下載資料夾。
+2. 解除安裝舊版（相簿與整理進度會清空，所以第 1 步一定要做）。
+3. 從 [Releases](https://github.com/hoonsor/APK-Photo/releases) 下載 `PhotoSortBox-v1.2.0.apk` 安裝，允許相片權限。
+4. 「更多 → 備份與還原」**匯入**剛才的備份檔。之後的版本都能直接更新。
 
 ## 畫面總覽
 
@@ -164,7 +188,7 @@ Android 預設會把照片裡的 GPS 藏起來，必須另外允許。
 v1.1.1、v1.1.2 已修正。請更新到最新版。
 
 **為什麼看不到地圖？**
-App 刻意沒有網路權限，確保照片不會被傳出去，所以「位置」只顯示座標，按「在地圖 App 中開啟」交給 Google 地圖。
+內嵌地圖要把位置傳給地圖服務，而本 App 的網路只用來檢查更新、照片與位置都不會被傳出去，所以「位置」只顯示座標，按「在地圖 App 中開啟」交給 Google 地圖。
 
 **為什麼看不到拍攝地點？**
 要先在「位置」分頁允許讀取照片位置；另外，從通訊軟體下載的照片常被移除位置資訊，拍攝時沒開定位也不會有。
@@ -182,15 +206,42 @@ Android 只讓系統相簿看到其他 App 丟進垃圾桶的檔案，這是平�
 App 依「資料夾名稱是 LINE」或路徑在 `Pictures/LINE`、`Movies/LINE` 判斷。如果你的手機存在別的資料夾，請告訴開發者資料夾名稱。
 
 **更新後相簿不見了？**
-同一把簽章的新版覆蓋安裝不會清資料。如果你是卸載後重裝，資料會清空，請從備份檔還原。
+同一把簽章的新版覆蓋安裝不會清資料。如果你是卸載後重裝（例如從 v1.1.8 換到 v1.2.0），資料會清空，請從備份檔還原。
+
+**更新時顯示「簽章與目前安裝的不同」？**
+手機上是 v1.1.8 以前的舊金鑰版本，請照「手機端更新」裡「從 v1.1.8 以前換到 v1.2.0」的步驟做一次。
+
+**為什麼 v1.2.0 起有網路權限？**
+只用來向 GitHub 檢查與下載 App 更新（每天最多查一次），照片、相簿、位置都不會經過網路。
+
+## 如何發新版
+
+1. 修改 `AndroidManifest.xml` 的 `android:versionCode`（例如 `10201`）與 `android:versionName`（例如 `1.2.1`）。設定頁顯示的版號會自動跟著變。
+2. 在 `PROJECT_STATUS.md` 的「版本詳細紀錄」最上面新增 `### v1.2.1 — 日期` 段落（版本歷程摘要表也加一列），這段文字會自動成為 Release 的更新說明（也就是 App 內更新對話框顯示的內容）。
+3. 提交並推送 main，接著推送同名 tag：
+
+   ```bash
+   git tag v1.2.1
+   git push origin main v1.2.1
+   ```
+
+4. GitHub Actions 會在 ubuntu 上下載 build-tools 與 android.jar、跑 `tests/run.sh`、用 `build.sh` 打包並以共用金鑰簽章，發布 `PhotoSortBox-v1.2.1.apk`。tag 與 `versionName` 不一致時 CI 會直接失敗，避免 App 一直以為有新版。
+
+其他說明：
+- 每次推送 main 都會更新名為 `latest` 的預先發行版（`PhotoSortBox-latest.apk`），給想搶先測試時手動下載；App 內更新與 Obtainium 預設都不會把它當成新版。
+- 簽章 Secrets（`SIGNING_KEYSTORE_B64`、`SIGNING_STORE_PASSWORD`、`SIGNING_KEY_ALIAS`、`SIGNING_KEY_PASSWORD`）已由倬寫入 repo。沒有 Secrets 時 CI 用臨時金鑰（只確認能編譯），推 tag 時直接失敗。
 
 ## 自行建置（開發者）
 
 ```bash
-bash setup.sh                         # 從 npm 取得 aapt2 / ecj / d8 / apksigner 與 android.jar
-PB_KS_PASS=<密碼> bash build.sh         # 正式版
-PB_KS_PASS=<密碼> bash build.sh --lab   # 實驗版（可與正式版同時安裝）
+# 方式 1：Android SDK（倬的電腦、GitHub Actions）。需要 JDK 17 或 21、build-tools 36.0.0、platforms;android-35
+export ANDROID_HOME=<Android SDK 路徑>
+export SIGNING_KEYSTORE_PATH=<hoonsor-release.jks 路徑> SIGNING_STORE_PASSWORD=<密碼> SIGNING_KEY_ALIAS=<別名> SIGNING_KEY_PASSWORD=<密碼>
+bash build.sh                         # 正式版 → build/photo-sort-box.apk
+bash build.sh --lab                   # 實驗版（可與正式版同時安裝）
 bash tests/run.sh                     # 純邏輯測試
+
+# 方式 2：連不到 Google 的雲端容器：先 bash setup.sh 從 npm 取得工具鏈到 ../tools，其餘相同
 ```
 
-簽章金鑰 `keystore.p12` 與密碼不在 repo 裡，詳見 `AGENTS.md` 第 3 節。
+簽章金鑰與密碼不在 repo 裡，詳見 `AGENTS.md` 第 3 節。

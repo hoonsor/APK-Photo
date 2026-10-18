@@ -74,6 +74,7 @@ public class MainActivity extends Activity implements Store.Listener {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         setContentView(frame);
         Store.get().addListener(this);
+        autoCheckUpdate();
 
         if (!Media.granted(this)) {
             showPermissionScreen();
@@ -83,8 +84,26 @@ public class MainActivity extends Activity implements Store.Listener {
     }
 
     @Override protected void onDestroy() {
+        UpdateDialog.activityDestroyed(this);
         Store.get().removeListener(this);
         super.onDestroy();
+    }
+
+    /** App 內更新：每天最多查一次 GitHub，有新版才跳對話框；任何錯誤都安靜略過 */
+    private void autoCheckUpdate() {
+        final android.content.Context app = getApplicationContext();
+        Thread t = new Thread(new Runnable() {
+            @Override public void run() {
+                Updater.cleanup(app);
+                final Updater.Release r = Updater.autoCheck(app);
+                if (r == null) return;
+                runOnUiThread(new Runnable() {
+                    @Override public void run() { UpdateDialog.show(MainActivity.this, r, true); }
+                });
+            }
+        }, "update-check");
+        t.setDaemon(true);
+        t.start();
     }
 
     @Override public void onLowMemory() {
@@ -118,7 +137,7 @@ public class MainActivity extends Activity implements Store.Listener {
         TextView t2 = Ui.tv(this, partial
                 ? ("你剛才選的是「選取部分照片」，所以這個 App 只看得到那幾張，沒辦法幫你整理整個相簿。\n\n"
                  + "請點下面的按鈕，或到系統權限設定把「相片和影片」改成「允許全部」。")
-                : ("這個 App 只在你的手機本機運作，不會上傳任何照片，也沒有網路權限。\n\n"
+                : ("這個 App 只在你的手機本機運作，不會上傳任何照片；網路只用來檢查 App 更新。\n\n"
                  + "請允許存取「所有照片」，否則只能整理你手動挑選的那幾張。"), 14.5f, T.DIM, false);
         t2.setGravity(Gravity.CENTER);
         t2.setLineSpacing(Ui.dp(this, 4), 1f);
@@ -292,6 +311,7 @@ public class MainActivity extends Activity implements Store.Listener {
     @Override
     protected void onResume() {
         super.onResume();
+        UpdateDialog.resume();
         long[] req = Store.get().consumeSortStartRequest();
         if (req != null) {
             select(TAB_SORT);

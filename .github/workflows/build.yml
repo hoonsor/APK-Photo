@@ -1,0 +1,141 @@
+name: Build APK
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+# 這個專案不用 Gradle：build.sh 直接呼叫 aapt2、javac、d8、apksigner 打包（見 AGENTS.md 第 3 節）
+env:
+  PB_BUILD_TOOLS: "36.0.0"
+  PB_PLATFORM: "35"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      # runner 內建 Android SDK（ANDROID_HOME），但不保證有指定版本；用 sdkmanager 下載固定版本的 build-tools 與 android.jar
+      - name: Install build-tools and android.jar
+        run: |
+          SDKM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKM" --licenses > /dev/null || true
+          "$SDKM" --install "build-tools;${PB_BUILD_TOOLS}" "platforms;android-${PB_PLATFORM}" > /dev/null
+          ls "$ANDROID_HOME/build-tools/${PB_BUILD_TOOLS}/aapt2" "$ANDROID_HOME/platforms/android-${PB_PLATFORM}/android.jar"
+
+      - name: Logic tests
+        run: bash tests/run.sh
+
+      - name: Read version
+        id: ver
+        run: |
+          VERSION=$(grep -oP 'android:versionName="\K[^"]+' AndroidManifest.xml)
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "versionName = ${VERSION}"
+
+      # tag 與 versionName 不一致時，App 內更新會一直以為有新版，所以直接擋下
+      - name: Check tag matches versionName
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          if [ "${GITHUB_REF_NAME}" != "v${{ steps.ver.outputs.version }}" ]; then
+            echo "::error::tag ${GITHUB_REF_NAME} 與 versionName ${{ steps.ver.outputs.version }} 不一致，請先改 AndroidManifest.xml"
+            exit 1
+          fi
+
+      # 共用簽章 hoonsor-release.jks：Secrets 由倬用 setup-hoonsor-signing.ps1 寫入。
+      # 沒有 Secrets 時（例如 fork 的 PR）產生一把臨時金鑰，只為了確認能編譯；tag 時直接失敗，不發布這種 APK
+      - name: Decode signing key
+        env:
+          SIGNING_KEYSTORE_B64: ${{ secrets.SIGNING_KEYSTORE_B64 }}
+        run: |
+          KS="$RUNNER_TEMP/hoonsor-release.jks"
+          echo "SIGNING_KEYSTORE_PATH=$KS" >> "$GITHUB_ENV"
+          if [ -n "$SIGNING_KEYSTORE_B64" ]; then
+            echo "$SIGNING_KEYSTORE_B64" | base64 -d > "$KS"
+          else
+            if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+              echo "::error::沒有 SIGNING_KEYSTORE_B64，不能發布正式版"
+              exit 1
+            fi
+            echo "::warning::沒有 SIGNING_KEYSTORE_B64，這次用臨時金鑰簽章。這種 APK 無法覆蓋安裝，App 內更新與 Obtainium 都會失敗。"
+            PW=$(openssl rand -hex 16)
+            echo "::add-mask::$PW"
+            keytool -genkeypair -keystore "$KS" -alias temp -keyalg RSA -keysize 2048 -validity 1 \
+              -storepass "$PW" -keypass "$PW" -dname "CN=Temporary" > /dev/null 2>&1
+            echo "TEMP_SIGNING_PW=$PW" >> "$GITHUB_ENV"
+          fi
+
+      - name: Build APK
+        env:
+          SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD || env.TEMP_SIGNING_PW }}
+          SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS || 'temp' }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD || env.TEMP_SIGNING_PW }}
+        run: |
+          set -o pipefail
+          bash build.sh 2>&1 | tee build.log
+
+      # 編譯失敗時把錯誤寫成 annotation，方便不下載 log 也能看到原因
+      - name: Report build errors
+        if: failure()
+        run: |
+          grep -E "error|錯誤|Exception|找不到|缺少|請設定" build.log | head -40 | while IFS= read -r line; do
+            echo "::error::${line//%/%25}"
+          done || true
+
+      - name: Rename APK with version
+        run: |
+          mkdir -p dist
+          cp build/photo-sort-box.apk "dist/PhotoSortBox-v${{ steps.ver.outputs.version }}.apk"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PhotoSortBox-v${{ steps.ver.outputs.version }}
+          path: dist/*.apk
+
+      # main 每次推送都更新「latest」預先發行版，手機打開固定網址即可下載最新測試版
+      # （預先發行版不會被 App 內更新與 Obtainium 預設設定當成正式新版）
+      - name: Publish rolling latest
+        if: github.ref == 'refs/heads/main'
+        run: |
+          cp dist/PhotoSortBox-v*.apk PhotoSortBox-latest.apk
+          gh release delete latest --yes --cleanup-tag || true
+          gh release create latest PhotoSortBox-latest.apk \
+            --prerelease --title "最新測試版（自動編譯 v${{ steps.ver.outputs.version }}）" \
+            --notes "commit ${GITHUB_SHA::7} 自動編譯的測試版，正式版請看標記為 Latest 的 Release。" \
+            --target "${GITHUB_SHA}"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      # 更新說明取自 PROJECT_STATUS.md 對應版本的段落（### vX.Y.Z 到下一個 ###）
+      - name: Release notes
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          awk -v ver="### ${GITHUB_REF_NAME}" '
+            index($0, ver) == 1 { on = 1; next }
+            on && /^#/ { exit }
+            on { print }
+          ' PROJECT_STATUS.md > notes.md
+          if ! grep -q '[^[:space:]]' notes.md; then
+            echo "${GITHUB_REF_NAME} 版本更新。" > notes.md
+          fi
+          cat notes.md
+
+      # 推送 vX.Y.Z tag 時建立正式 Release（App 內更新與 Obtainium 都讀這裡）
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }}
+          body_path: notes.md
+          files: dist/*.apk

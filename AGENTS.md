@@ -29,7 +29,7 @@
 | 套件 | `com.photobox.sorter`（LAB 版 `com.photobox.sorter.lab`）。舊 APP，**不改套件名** |
 | 平台 | minSdk 30（Android 11）／targetSdk 34 |
 | 技術棧 | **純 Android Framework（Java 8 語法）。無 AndroidX、無 Gradle、無 Kotlin、無任何第三方函式庫** |
-| 權限 | `READ_MEDIA_IMAGES`、`READ_MEDIA_VIDEO`、`READ_MEDIA_VISUAL_USER_SELECTED`、`ACCESS_MEDIA_LOCATION`、`VIBRATE`、`READ_EXTERNAL_STORAGE`（maxSdk 32）。**沒有網路權限** |
+| 權限 | `READ_MEDIA_IMAGES`、`READ_MEDIA_VIDEO`、`READ_MEDIA_VISUAL_USER_SELECTED`、`ACCESS_MEDIA_LOCATION`、`VIBRATE`、`READ_EXTERNAL_STORAGE`（maxSdk 32）、`INTERNET`＋`REQUEST_INSTALL_PACKAGES`（v1.2.0 起，**只用於 App 內更新**） |
 | 規模 | 35 個 Java 類別、約 9,400 行 |
 | 測試裝置 | OPPO Reno14F／Android 15／ColorOS（開發端無法連接實機，全靠倬回報） |
 | repo | `hoonsor/APK-Photo`（public）。程式碼工作資料夾為 **`D:\dev\APK-Photo`**（全英文路徑，方便建置與安裝手機測試）。`D:\01-Project\30-手機照片APP` 只放筆記、舊快照（`photobox/`）、舊簽章與交付的 APK，不在那裡建置 |
@@ -37,21 +37,29 @@
 ## 3. 建置與安裝
 
 ```bash
-bash setup.sh                       # 安裝工具鏈到 ../tools（約 50MB，從 npm 取得）
-PB_KS_PASS=<密碼> bash build.sh       # 正式版 → build/photo-sort-box.apk
-PB_KS_PASS=<密碼> bash build.sh --lab # LAB 版 → build/photo-sort-box-lab.apk
-bash tests/run.sh                   # 純邏輯測試（Flow／BackupMatch／Geo），不需要 Android
+export ANDROID_HOME=<Android SDK>   # 或先 bash setup.sh 從 npm 取得工具鏈到 ../tools（雲端容器用）
+export SIGNING_KEYSTORE_PATH=... SIGNING_STORE_PASSWORD=... SIGNING_KEY_ALIAS=... SIGNING_KEY_PASSWORD=...
+bash build.sh                       # 正式版 → build/photo-sort-box.apk
+bash build.sh --lab                 # LAB 版 → build/photo-sort-box-lab.apk
+bash tests/run.sh                   # 純邏輯測試（Flow／BackupMatch／Geo／UpdateVersion），不需要 Android
 ```
 
-- **簽章金鑰不在 repo 裡。** `keystore.p12` 只存在倬的電腦（`D:\01-Project\30-手機照片APP\photobox\keystore.p12`，勿刪）。
-  建置前把它放到專案根目錄，或用 `PB_KEYSTORE=<路徑>` 指定。密碼向倬索取，**不要寫進任何檔案**。
+- **工具鏈**：`build.sh` 先找 `../tools`（或 `PB_TOOLS`）的 npm 工具鏈，沒有就用 `ANDROID_HOME` 的 Android SDK
+  （`PB_BUILD_TOOLS` 預設 36.0.0、`PB_PLATFORM` 預設 35；SDK 沒有 ecj，改用 JDK 的 `javac -source 8 -target 8`）。
+  **build-tools 34.0.0 的 d8 遇到 javac 編出的 class 會 NullPointerException**，不要降版。
+- **簽章（v1.2.0 起）**：共用金鑰 `hoonsor-release.jks`，從環境變數 `SIGNING_KEYSTORE_PATH`、`SIGNING_STORE_PASSWORD`、
+  `SIGNING_KEY_ALIAS`、`SIGNING_KEY_PASSWORD` 讀取；GitHub Actions 從 repo Secrets 解出。金鑰與密碼**不要寫進任何檔案**。
+  憑證 SHA-256 `514ec00eea070dd3e67b4f6a0c722c9c779497bb0797e7a3446fcca4e4548825`。
+- 舊金鑰 `keystore.p12`（v1.1.8 以前）只存在倬的電腦（`D:/01-Project/30-手機照片APP/photobox/keystore.p12`，勿刪），
+  設定 `PB_KS_PASS`（＋`PB_KEYSTORE`）時 `build.sh` 仍可用它簽，只為了替還沒換裝的手機建置。
 - 找不到金鑰時 `build.sh` 會**停下來**，不會自動產生新的（見第 7 節坑 14）。
 - `--lab`：應用 ID 加 `.lab`、名稱加「LAB」，可和正式版同時安裝、資料完全隔離。
   實作是 `aapt2 link --rename-manifest-package` 搭配 `--custom-package com.photobox.sorter`
   （讓 `R.java` 留在原套件），所以兩版永遠是同一份程式碼。**測新功能用 LAB 版，不要另開專案。**
-- 交付方式：把兩個 APK 命名為 `照片整理箱_vX.Y.Z.apk`、`照片整理箱_LAB_vX.Y.Z.apk` 放到倬的
-  `30-手機照片APP` 資料夾。尚未接 GitHub Actions（見第 5 節決定 D14）。
-- 安裝：倬側載。同一把金鑰簽的新版可直接覆蓋安裝，資料保留。
+- **發布**：改 `AndroidManifest.xml` 版號 → `PROJECT_STATUS.md` 新增 `### vX.Y.Z — 日期` → 推送 main 與同名 tag。
+  `.github/workflows/build.yml` 在 ubuntu 上用 sdkmanager 下載 build-tools 與 android.jar、跑測試、`build.sh` 打包，
+  發布 `PhotoSortBox-vX.Y.Z.apk` 到 Releases（main 另發 `latest` 預先發行版）。細節見 README「如何發新版」。
+- 安裝與更新：手機用 App 內更新（`Updater`／`UpdateDialog`）或 Obtainium。同一把金鑰簽的新版可直接覆蓋安裝，資料保留。
 
 ### 為什麼建置長這樣
 
@@ -179,7 +187,7 @@ album_items(album_id, media_id, ts, PRIMARY KEY(album_id, media_id))
 | D1 | 純 Framework、無 Gradle、npm 工具鏈 | 當初環境連不到 Google Maven，只能這樣建置 | Gradle＋AndroidX：環境無法下載 |
 | D2 | 相簿做成**虛擬相簿**（DB 清單，不搬檔） | 參考 App 的「複製相簿」「不在任何相簿中」都建立在這個模型上；一張可在多本；不必每次跳系統確認 | 實體資料夾當相簿：每次搬檔都要系統確認，且一張只能在一處（保留為「移到資料夾」功能） |
 | D3 | 外觀維持深色主題，只參考操作方式 | 倬說「不一定要重新大改界面，功能具備、操作類似即可」，且偏好深色 HSL 色票 | 照抄參考 App 的淺藍白外觀 |
-| D4 | **沒有網路權限** | 照片不會被上傳，是本 App 的隱私承諾（README 寫明） | — |
+| D4 | 網路權限**只用於 App 內更新**（v1.2.0 起；之前完全沒有網路權限） | 照片不會被上傳是本 App 的隱私承諾（README 寫明）；2026-10-18 倬決定加 INTERNET 只做更新檢查與下載，照片、相簿、位置都不經過網路 | 完全不加權限、只開瀏覽器到 Releases（倬選擇完整 App 內更新） |
 | D5 | 位置分頁只顯示座標＋「在地圖 App 中開啟」 | 內嵌地圖需要網路權限與 API key，違反 D4 | 內嵌 Google 地圖 |
 | D6 | 備份＝JSON 經系統檔案選擇器（SAF）匯出／匯入，還原為**合併** | 不需任何權限；可存到下載、雲端硬碟、Dropbox；換手機時用 檔名＋大小＋時間 比對 | 串接 Drive／Dropbox API：要網路權限、OAuth 與外部函式庫 |
 | D7 | 不做參考 App 的「好友」「QR 碼掃描器」 | 好友需雲端帳號；QR 需相機權限，與 App 定位不符 | — |
@@ -189,8 +197,8 @@ album_items(album_id, media_id, ts, PRIMARY KEY(album_id, media_id))
 | D11 | 往右滑＝打開相簿整理（空選取、sticky）；往左滑只在**沒有選取**時收起 | 倬要求往右滑進入；避免誤滑把選好的照片取消 | 往左滑一律取消 |
 | D12 | 拖曳到相簿時只改外框與底色，不放大卡片 | 放大會超出相簿欄被裁切（倬回報） | 放大 1.06 倍 |
 | D13 | 「從某張開始整理」一次選完方向與範圍（4 選項），整理頁上方有直接按鈕 | 倬要求往新、往舊都能整理，且原本要點來源選單到最下面太慢 | 只能往舊、依該張狀態自動決定範圍（畫面看不出來，容易混淆） |
-| D14 | 簽章用專案自帶的 `keystore.p12`，暫不改用共用簽章 `hoonsor-release.jks`／GitHub Actions | 換簽章手機要卸載重裝，卸載會清掉相簿與整理進度；2026-10-13 倬選擇暫不換 | 立即改用共用簽章（之後要做，見 PROJECT_STATUS 下一步） |
-| D15 | 簽章密碼改由環境變數 `PB_KS_PASS` 提供；找不到金鑰時停止 | repo 是公開的，不能放密碼（2026-10-13 倬決定）；自動產生新金鑰曾造成 v1.0.6→v1.1.0 必須卸載 | 密碼寫死在 build.sh |
+| D14 | v1.2.0 起改用共用簽章 `hoonsor-release.jks`＋GitHub Actions 發布 | 免接線更新與 Agent API 都需要共用簽章；2026-10-18 倬決定換（一次性：備份 → 卸載 → 安裝 → 匯入）。2026-10-13 原決定暫不換已取消 | 繼續用自帶的 `keystore.p12`（CI 拿不到、無法和其他 APP 互通） |
+| D15 | 簽章金鑰與密碼一律由環境變數提供（`SIGNING_*`；舊金鑰 `PB_KS_PASS`）；找不到金鑰時停止 | repo 是公開的，不能放密碼（2026-10-13 倬決定）；自動產生新金鑰曾造成 v1.0.6→v1.1.0 必須卸載 | 密碼寫死在 build.sh |
 | D16 | 程式碼放在英文路徑 `D:\dev\APK-Photo`，中文資料夾只留筆記與舊快照 | 方便建置與安裝手機測試，並與其他 APK 專案的標準骨架一致（2026-10-18 確認已搬家；原 2026-10-13 決定暫不搬已取消） | 繼續在中文路徑 `30-手機照片APP` 開發 |
 | D17 | 相簿內頁不提供「從這本相簿開始整理」 | 整理來源目前只支援資料夾與年月，硬做會從全部照片接續，名不符實 | 曾短暫加入選單後移除 |
 | D18 | 單張檢視下方按鈕改為 資訊／喜好／加入相簿／分享／刪除，保留／待刪移到 ⋮ | 對齊參考 App 的四顆按鈕；原本五個整理動作放不下 | — |
@@ -208,7 +216,7 @@ album_items(album_id, media_id, ts, PRIMARY KEY(album_id, media_id))
 
 **Always**
 - 介面、文件、回覆一律繁體中文（技術名詞保留英文）
-- 每一版：改 `AndroidManifest.xml` 版號＋`SettingsPage` 關於頁版號、更新 `PROJECT_STATUS.md`（寫**為什麼**）、同時產出正式版與 LAB 版、跑 `tests/run.sh`、做 dex 字串檢查
+- 每一版：改 `AndroidManifest.xml` 版號（設定頁版號從 PackageManager 讀，不用改）、更新 `PROJECT_STATUS.md`（寫**為什麼**）、同時產出正式版與 LAB 版、跑 `tests/run.sh`、做 dex 字串檢查
 - 功能改變時更新 `README.md`；動作改變時同步 `docs/AGENT_API.md` 與 `docs/agent-manifest.json`；架構或踩坑時更新本檔
 - 寫入／刪除媒體用 `it.uri()`，走 `Media` 的 PendingIntent 流程；狀態走 `Store`；相簿走 `Albums`
 - 新的純邏輯抽成不引用 Android 的類別並補 JVM 測試
@@ -219,7 +227,7 @@ album_items(album_id, media_id, ts, PRIMARY KEY(album_id, media_id))
 - 更換簽章金鑰、套件名，或任何會逼倬卸載重裝的變更
 - 會丟資料的 DB 結構變更
 - 拿掉既有功能、改變手勢預設或長按語意
-- 改建置方式（例如導入 Gradle／GitHub Actions）
+- 改建置方式（例如導入 Gradle；GitHub Actions 已於 v1.2.0 導入）
 
 **Never**
 - 提交 `keystore.p12`、任何密碼、API key（repo 是公開的）
@@ -250,9 +258,9 @@ album_items(album_id, media_id, ts, PRIMARY KEY(album_id, media_id))
     拖放放開後用 `post` 再改畫面，不要在 `ACTION_DROP` 當下重建側欄；拖到相簿上不要放大卡片。
     點日期格＝整天全選／全取消（`setDateSelectEnabled(false)` 可關閉，StartPickActivity 有關）。
 14. **簽章金鑰遺失會逼使用者卸載**：v1.0.6 的金鑰在已回收的容器裡遺失，v1.1.0 起換了新金鑰，倬必須卸載重裝、整理進度歸零。
-    現在的 `keystore.p12` 務必保留；Android 12+ 不同簽章的 APP 宣告同名權限會安裝失敗（日後 Agent API 用 signature 權限時要注意）。
+    舊的 `keystore.p12` 仍要保留（替還沒換裝的手機建置）；v1.2.0 起正式版用共用金鑰。Android 12+ 不同簽章的 APP 宣告同名權限會安裝失敗（日後 Agent API 用 signature 權限時要注意）。
 15. **Agent API 的 signature 權限**：標準 Agent API 用 `protectionLevel="signature"`，大腦 APP 用共用金鑰簽，
-    本 App 用自帶金鑰，兩者簽章不同就無法互通。實作 Agent API 前必須先換成共用簽章（會需要卸載重裝，先匯出備份）。
+    v1.2.0 起本 App 也用共用金鑰，已可互通（倬的手機要先完成一次「備份 → 卸載 → 安裝 → 匯入」換裝）。
 
 ## 8. 倬的偏好
 

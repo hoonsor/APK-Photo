@@ -108,6 +108,23 @@ public class LogicTest {
         ok(Geo.parseIso6709("+00.0000+000.0000/") == null, "zero rejected");
         ok(Geo.parseIso6709(null) == null && Geo.parseIso6709("garbage") == null, "garbage");
 
+        // ---------- UpdateVersion（App 內更新） ----------
+        ok(UpdateVersion.isNewer("v1.2.1", "1.2.0"), "patch newer");
+        ok(UpdateVersion.isNewer("v1.10.0", "1.9.9"), "numeric not string compare");
+        ok(UpdateVersion.isNewer("v2.0.0", "1.99.99"), "major newer");
+        ok(!UpdateVersion.isNewer("v1.2.0", "1.2.0"), "same version");
+        ok(!UpdateVersion.isNewer("v1.1.8", "1.2.0"), "older");
+        ok(!UpdateVersion.isNewer("v1.2", "1.2.0") && UpdateVersion.isNewer("v1.2.1", "1.2") && UpdateVersion.isNewer("v1.3", "1.2.9"), "pad zeros");
+        ok(UpdateVersion.isNewer(" V1.3.0 ", "1.2.0"), "upper V and spaces");
+        ok(UpdateVersion.isNewer("v1.2.0", "1.2.0-lab") && !UpdateVersion.isNewer("v1.2.0-beta", "1.2.0")
+                && !UpdateVersion.isNewer("v1.2.0-beta", "1.2.0-lab"), "release beats prerelease");
+        ok(UpdateVersion.isNewer("v1.3.0-beta", "1.2.0"), "numbers first");
+        ok(!UpdateVersion.isNewer("latest", "1.2.0") && !UpdateVersion.isNewer("", "1.2.0") && !UpdateVersion.isNewer(null, "1.2.0")
+                && !UpdateVersion.isNewer("v1.0.0", null) && !UpdateVersion.isNewer("v1..0", "0.1.0") && !UpdateVersion.isNewer("v1.a.0", "0.1.0"), "unparsable never updates");
+        ok(UpdateVersion.pickApk(new String[]{"notes.txt", "Other-v1.apk", "PhotoSortBox-v1.2.0.apk"}, "PhotoSortBox-") == 2, "pick own apk");
+        ok(UpdateVersion.pickApk(new String[]{"notes.txt", "x.APK"}, "PhotoSortBox-") == 1, "fallback first apk");
+        ok(UpdateVersion.pickApk(new String[]{"notes.txt", null}, "PhotoSortBox-") == -1, "no apk");
+
         System.out.println(checks + " checks, " + fails + " failures");
         if (fails > 0) System.exit(1);
     }

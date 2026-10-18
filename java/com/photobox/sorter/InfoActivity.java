@@ -438,8 +438,8 @@ public class InfoActivity extends Activity implements Store.Listener {
         LinearLayout.LayoutParams lp2 = Ui.lpW();
         lp2.topMargin = Ui.dp(this, 10);
         body.addView(copy, lp2);
-        note("地圖不直接顯示在這裡：這個 App 刻意沒有網路權限（照片不會被傳到任何地方），"
-           + "而載入地圖需要連網。按上方按鈕會交給 Google 地圖等 App 顯示。");
+        note("地圖不直接顯示在這裡：載入地圖要把位置傳給地圖服務，這個 App 的網路只用來檢查更新，"
+           + "照片與位置都不會被傳出去。按上方按鈕會交給 Google 地圖等 App 顯示。");
     }
 
     private static String dms(double v, boolean lat) {

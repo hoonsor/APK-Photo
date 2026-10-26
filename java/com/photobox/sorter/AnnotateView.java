@@ -23,11 +23,16 @@ public class AnnotateView extends View {
 
     public static final int PEN = 0, MARKER = 1, RECT = 2, OVAL = 3, ARROW = 4, TEXT = 5;
 
-    /** 細／中／粗，乘上照片短邊。 */
-    private static final float[] STROKE = { 0.004f, 0.008f, 0.014f };
-    private static final float[] TEXT_SIZE = { 0.035f, 0.05f, 0.075f };
+    /** 粗細滑桿 1～100。線寬與文字大小都是「照片短邊的比例」，同一個設定在大圖小圖看起來一樣粗。 */
+    public static final int SIZE_MIN = 1, SIZE_MAX = 100, SIZE_DEFAULT = 25;
     /** 螢光筆比畫筆粗幾倍。 */
-    private static final float MARKER_MUL = 4f;
+    private static final float MARKER_MUL = 3.5f;
+
+    /** 線寬佔照片短邊的比例：1 → 0.17%、25 → 0.86%、100 → 3%。 */
+    static float strokeFrac(int size) { return 0.0015f + 0.0285f * clampSize(size) / SIZE_MAX; }
+    /** 文字大小佔照片短邊的比例：1 → 2.1%、25 → 4.5%、100 → 12%。 */
+    static float textFrac(int size) { return 0.02f + 0.10f * clampSize(size) / SIZE_MAX; }
+    static int clampSize(int v) { return Math.max(SIZE_MIN, Math.min(SIZE_MAX, v)); }
     private static final int MARKER_ALPHA = 0x66;
 
     public interface Listener {
@@ -64,7 +69,7 @@ public class AnnotateView extends View {
 
     private int tool = PEN;
     private int color = 0xFFFF5A5F;
-    private int level = 1;
+    private int size = SIZE_DEFAULT;
     private Listener listener;
 
     private Shape drawing;
@@ -104,8 +109,16 @@ public class AnnotateView extends View {
     public int tool() { return tool; }
     public void setColor(int c) { color = c; }
     public int color() { return color; }
-    public void setLevel(int l) { level = Math.max(0, Math.min(2, l)); }
-    public int level() { return level; }
+    public void setSize(int v) { size = clampSize(v); }
+    public int size() { return size; }
+
+    /** 目前工具在畫面上的實際粗細（px）：線寬，文字工具則是字高。給粗細預覽用。 */
+    public float previewPx() {
+        float k = 1f;
+        if (base != null) { float[] v = new float[9]; toView.getValues(v); k = v[Matrix.MSCALE_X]; }
+        if (tool == TEXT) return minDim() * textFrac(size) * k;
+        return minDim() * strokeFrac(size) * (tool == MARKER ? MARKER_MUL : 1f) * k;
+    }
 
     public boolean canUndo() { return !undo.isEmpty(); }
     public boolean canRedo() { return !redo.isEmpty(); }
@@ -149,7 +162,7 @@ public class AnnotateView extends View {
         t.type = TEXT;
         t.color = color;
         t.text = s;
-        t.textSize = minDim() * TEXT_SIZE[level];
+        t.textSize = minDim() * textFrac(size);
         // 點的位置當作文字中心，比較符合直覺
         text.setTextSize(t.textSize);
         t.x0 = bx - text.measureText(firstLine(s)) / 2f;
@@ -333,7 +346,7 @@ public class AnnotateView extends View {
                 drawing = new Shape();
                 drawing.type = tool;
                 drawing.color = color;
-                drawing.width = minDim() * STROKE[level] * (tool == MARKER ? MARKER_MUL : 1f);
+                drawing.width = minDim() * strokeFrac(size) * (tool == MARKER ? MARKER_MUL : 1f);
                 if (tool == PEN || tool == MARKER) {
                     drawing.path = new Path();
                     drawing.path.moveTo(x, y);

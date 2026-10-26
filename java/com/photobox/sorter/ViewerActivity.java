@@ -27,7 +27,8 @@ import java.util.List;
 /**
  * 單張檢視：可縮放的照片、可直接播放的影片。整理功能也在這裡（v1.3.0 起取代原本的「整理」分頁）。
  * 照片沒放大時：左右滑換張、往上滑加入待刪（10 秒內可復原）、往下滑編輯照片；放大時滑動是拖曳。
- * 下方：資訊／喜好／加入相簿／編輯／分享／刪除；右上 ⋮：保留、待刪、清除標記、編輯。
+ * 待刪的照片不在左右滑的範圍裡（點開的那張本身是待刪時例外）。
+ * 下方：資訊／喜好／加入相簿／編輯／分享／刪除；右上 ⋮：待刪、清除標記、編輯。
  */
 public class ViewerActivity extends Activity implements Store.Listener {
 
@@ -67,6 +68,8 @@ public class ViewerActivity extends Activity implements Store.Listener {
     private TextView undoText, undoBtn;
     private Item undoItem;
     private int undoPrev;
+    /** 加入待刪前，那張在 list 裡的位置（復原時放回去）。 */
+    private int undoIndex;
     private int undoLeft;
     private final android.os.Handler handler = new android.os.Handler(android.os.Looper.getMainLooper());
     private final Runnable undoTick = new Runnable() {
@@ -92,6 +95,15 @@ public class ViewerActivity extends Activity implements Store.Listener {
             }
         }
         if (list.isEmpty()) list.addAll(Store.get().all);
+        // 已經在待刪清單的照片不出現在左右滑的範圍裡（倬 2026-10-26）。
+        // 例外：點開的那張本身就是待刪（例如從「待刪」篩選點進來），這時整份清單照原樣，才看得到它們。
+        Item start = Store.get().byId.get(id);
+        if (start != null && Store.get().stateOf(start) != Db.STATE_PENDING) {
+            for (int i = list.size() - 1; i >= 0; i--) {
+                Item it = list.get(i);
+                if (it.id != id && Store.get().stateOf(it) == Db.STATE_PENDING) list.remove(i);
+            }
+        }
         pos = 0;
         for (int i = 0; i < list.size(); i++) {
             if (list.get(i).id == id) { pos = i; break; }
@@ -428,13 +440,11 @@ public class ViewerActivity extends Activity implements Store.Listener {
         Store.get().setState(this, it, state, true);
         Store.get().notifyChanged();
         updateChrome();
-        Ui.toast(this, state == Db.STATE_PENDING ? "已加入待刪清單"
-                : state == Db.STATE_KEPT ? "已標記為保留" : "已清除標記");
+        Ui.toast(this, state == Db.STATE_KEPT ? "已標記為保留" : "已清除標記");
     }
 
     private void showMenu(View anchor) {
         PopupMenu pm = new PopupMenu(this, anchor);
-        pm.getMenu().add(0, 1, 0, "標記為保留");
         pm.getMenu().add(0, 2, 1, "加入待刪清單");
         pm.getMenu().add(0, 3, 2, "清除標記");
         if (!cur().video) pm.getMenu().add(0, 4, 3, "編輯照片（文字、螢光筆、框線、箭頭）");
@@ -442,8 +452,7 @@ public class ViewerActivity extends Activity implements Store.Listener {
         pm.setOnMenuItemClickListener(new PopupMenu.OnMenuItemClickListener() {
             @Override public boolean onMenuItemClick(MenuItem m) {
                 switch (m.getItemId()) {
-                    case 1: mark(Db.STATE_KEPT); break;
-                    case 2: mark(Db.STATE_PENDING); break;
+                    case 2: markPending(); break;
                     case 3: mark(Db.STATE_NONE); break;
                     case 4: openEditor(); break;
                     case 5: openExternally(cur()); break;
@@ -456,20 +465,34 @@ public class ViewerActivity extends Activity implements Store.Listener {
 
     // ---------- 往上滑：加入待刪（可復原） ----------
 
-    private void swipeToPending() {
+    private void swipeToPending() { markPending(); }
+
+    /**
+     * 加入待刪（往上滑、⋮、刪除對話框共用）：同時從左右滑的清單拿掉，原本的下一張補上來；
+     * 例如 3 張裡第 2 張加入待刪後，從第 3 張往回滑會直接到第 1 張。10 秒內可復原，復原時放回原位。
+     */
+    private void markPending() {
         final Item it = cur();
         int prev = Store.get().stateOf(it);
         if (prev == Db.STATE_PENDING) {
+            // 在「待刪」篩選裡瀏覽時才會遇到：不移除，直接看下一張
             Ui.toast(this, "這張已經在待刪清單裡");
-        } else {
-            Store.get().setState(this, it, Db.STATE_PENDING, false);
-            Store.get().notifyChanged();
-            haptic();
-            showUndo(it, prev);
+            if (pos < list.size() - 1) { pos++; show(); }
+            return;
         }
-        // 跟原本的整理一樣，處理完自動看下一張
-        if (pos < list.size() - 1) { pos++; show(); }
-        else { updateChrome(); Ui.toast(this, "已經是最後一張"); }
+        Store.get().setState(this, it, Db.STATE_PENDING, false);
+        Store.get().notifyChanged();
+        haptic();
+        undoIndex = pos;
+        list.remove(pos);
+        if (list.isEmpty()) {
+            Ui.toast(this, "已加入待刪清單，這裡沒有其他照片了");
+            finish();
+            return;
+        }
+        if (pos >= list.size()) pos = list.size() - 1;   // 刪的是最後一張：退回前一張
+        show();
+        showUndo(it, prev);
     }
 
     private LinearLayout buildUndoBar() {
@@ -530,9 +553,15 @@ public class ViewerActivity extends Activity implements Store.Listener {
         Store.get().setState(this, it, undoPrev, false);
         Store.get().notifyChanged();
         hideUndo();
+        int at = -1;
         for (int i = 0; i < list.size(); i++) {
-            if (list.get(i).id == it.id) { pos = i; break; }
+            if (list.get(i).id == it.id) { at = i; break; }
         }
+        if (at < 0) {
+            at = Math.max(0, Math.min(undoIndex, list.size()));
+            list.add(at, it);
+        }
+        pos = at;
         show();
         Ui.toast(this, "已復原，這張不在待刪清單了");
     }
@@ -605,7 +634,7 @@ public class ViewerActivity extends Activity implements Store.Listener {
                 .setTitle("刪除這個" + (cur().video ? "影片" : "照片"))
                 .setItems(ops, new DialogInterface.OnClickListener() {
                     @Override public void onClick(DialogInterface d, int w) {
-                        if (w == 0) { mark(Db.STATE_PENDING); return; }
+                        if (w == 0) { markPending(); return; }
                         stopVideo();
                         showPoster();
                         awaiting = new ArrayList<Item>();

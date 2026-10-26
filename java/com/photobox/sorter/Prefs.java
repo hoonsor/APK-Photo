@@ -37,6 +37,6 @@ public final class Prefs {
     public static void setEditorTool(Context c, int t) { sp(c).edit().putInt("editor_tool", t).apply(); }
     public static int editorColor(Context c, int def) { return sp(c).getInt("editor_color", def); }
     public static void setEditorColor(Context c, int v) { sp(c).edit().putInt("editor_color", v).apply(); }
-    public static int editorLevel(Context c) { return sp(c).getInt("editor_level", 1); }
-    public static void setEditorLevel(Context c, int v) { sp(c).edit().putInt("editor_level", v).apply(); }
+    public static int editorSize(Context c, int def) { return sp(c).getInt("editor_size", def); }
+    public static void setEditorSize(Context c, int v) { sp(c).edit().putInt("editor_size", v).apply(); }
 }

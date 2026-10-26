@@ -22,6 +22,7 @@ import android.widget.HorizontalScrollView;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
+import android.widget.SeekBar;
 import android.widget.TextView;
 
 import java.io.OutputStream;
@@ -51,13 +52,14 @@ public class EditorActivity extends Activity {
     };
     private static final String[] TOOL_NAMES = { "畫筆", "螢光筆", "方框", "圓框", "箭頭", "文字" };
     private static final int[] TOOL_ICONS = { Icons.EDIT, Icons.MARKER, Icons.RECT, Icons.OVAL, Icons.ARROW_DIAG, Icons.TEXT };
-    private static final String[] LEVEL_NAMES = { "細", "中", "粗" };
 
     private Item item;
     private AnnotateView canvas;
     private ProgressBar loading;
     private ImageView undoBtn, redoBtn;
-    private TextView saveBtn, levelBtn;
+    private TextView saveBtn, sizeText;
+    private SeekBar sizeBar;
+    private SizePreview sizePreview;
     private LinearLayout toolRow, colorRow;
     private boolean saving = false;
 
@@ -77,7 +79,7 @@ public class EditorActivity extends Activity {
         canvas = new AnnotateView(this);
         canvas.setTool(Prefs.editorTool(this));
         canvas.setColor(Prefs.editorColor(this, COLORS[0]));
-        canvas.setLevel(Prefs.editorLevel(this));
+        canvas.setSize(Prefs.editorSize(this, AnnotateView.SIZE_DEFAULT));
         canvas.setListener(new AnnotateView.Listener() {
             @Override public void onChanged() { updateButtons(); }
             @Override public void onTextRequest(float bx, float by, AnnotateView.Shape existing) {
@@ -144,65 +146,88 @@ public class EditorActivity extends Activity {
     private LinearLayout buildBottom() {
         LinearLayout box = Ui.col(this);
         box.setBackgroundColor(T.SURFACE);
-        box.setPadding(0, Ui.dp(this, 8), 0, Ui.dp(this, 10));
+        box.setPadding(0, Ui.dp(this, 10), 0, Ui.dp(this, 10));
 
-        // 顏色＋粗細
-        LinearLayout row = Ui.rowH(this);
-        row.setPadding(Ui.dp(this, 12), 0, Ui.dp(this, 12), Ui.dp(this, 8));
+        // 顏色：橫向捲動
         HorizontalScrollView hs = new HorizontalScrollView(this);
         hs.setHorizontalScrollBarEnabled(false);
         colorRow = Ui.rowH(this);
+        colorRow.setPadding(Ui.dp(this, 14), 0, Ui.dp(this, 14), 0);
         hs.addView(colorRow);
-        row.addView(hs, Ui.lpWeight());
-        levelBtn = Ui.tv(this, "", 13.5f, T.TEXT, true);
-        levelBtn.setGravity(Gravity.CENTER);
-        levelBtn.setPadding(Ui.dp(this, 12), Ui.dp(this, 8), Ui.dp(this, 12), Ui.dp(this, 8));
-        levelBtn.setBackground(Ui.tappable(T.SURFACE2, Ui.dp(this, 16), T.BORDER, Ui.dp(this, 1)));
-        levelBtn.setOnClickListener(new View.OnClickListener() {
-            @Override public void onClick(View v) {
-                canvas.setLevel((canvas.level() + 1) % 3);
-                Prefs.setEditorLevel(EditorActivity.this, canvas.level());
-                styleLevel();
+        box.addView(hs, Ui.lpW());
+        box.addView(Ui.space(this, 8));
+
+        // 粗細：滑桿連續調整（1～100），右邊即時預覽實際粗細與顏色
+        LinearLayout sizeRow = Ui.rowH(this);
+        sizeRow.setPadding(Ui.dp(this, 14), 0, Ui.dp(this, 10), 0);
+        sizeText = Ui.tv(this, "", 13f, T.DIM, true);
+        sizeText.setMinWidth(Ui.dp(this, 58));
+        sizeRow.addView(sizeText);
+        sizeBar = new SeekBar(this);
+        sizeBar.setMax(AnnotateView.SIZE_MAX - AnnotateView.SIZE_MIN);
+        sizeBar.setProgress(canvas.size() - AnnotateView.SIZE_MIN);
+        sizeBar.setProgressTintList(android.content.res.ColorStateList.valueOf(T.PRIMARY));
+        sizeBar.setThumbTintList(android.content.res.ColorStateList.valueOf(T.PRIMARY));
+        sizeBar.setProgressBackgroundTintList(android.content.res.ColorStateList.valueOf(T.SURFACE3));
+        sizeBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override public void onProgressChanged(SeekBar b, int v, boolean user) {
+                canvas.setSize(v + AnnotateView.SIZE_MIN);
+                styleSize();
+            }
+            @Override public void onStartTrackingTouch(SeekBar b) { }
+            @Override public void onStopTrackingTouch(SeekBar b) {
+                Prefs.setEditorSize(EditorActivity.this, canvas.size());
             }
         });
-        LinearLayout.LayoutParams llp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        llp.leftMargin = Ui.dp(this, 8);
-        row.addView(levelBtn, llp);
-        box.addView(row, Ui.lpW());
+        sizeRow.addView(sizeBar, Ui.lpWeight());
+        sizePreview = new SizePreview();
+        sizePreview.setBackground(Ui.round(T.SURFACE2, Ui.dp(this, 10), T.BORDER, Ui.dp(this, 1)));
+        LinearLayout.LayoutParams plp = new LinearLayout.LayoutParams(Ui.dp(this, 46), Ui.dp(this, 46));
+        plp.leftMargin = Ui.dp(this, 6);
+        sizeRow.addView(sizePreview, plp);
+        box.addView(sizeRow, Ui.lpW());
+        box.addView(Ui.space(this, 8));
 
-        // 工具
+        // 工具：固定寬度的格子＋橫向捲動，字不會被擠出框線
+        HorizontalScrollView ts = new HorizontalScrollView(this);
+        ts.setHorizontalScrollBarEnabled(false);
         toolRow = Ui.rowH(this);
-        toolRow.setPadding(Ui.dp(this, 6), 0, Ui.dp(this, 6), 0);
+        toolRow.setPadding(Ui.dp(this, 10), 0, Ui.dp(this, 10), 0);
         for (int i = 0; i < TOOL_NAMES.length; i++) {
             final int t = i;
             LinearLayout cell = Ui.col(this);
             cell.setGravity(Gravity.CENTER);
-            cell.setPadding(0, Ui.dp(this, 8), 0, Ui.dp(this, 6));
+            cell.setPadding(Ui.dp(this, 4), Ui.dp(this, 9), Ui.dp(this, 4), Ui.dp(this, 9));
             ImageView iv = new ImageView(this);
-            cell.addView(iv, new LinearLayout.LayoutParams(Ui.dp(this, 24), Ui.dp(this, 24)));
-            cell.addView(Ui.space(this, 4));
-            TextView lab = Ui.tv(this, TOOL_NAMES[i], 11f, T.DIM, false);
+            LinearLayout.LayoutParams ilp = new LinearLayout.LayoutParams(Ui.dp(this, 24), Ui.dp(this, 24));
+            ilp.gravity = Gravity.CENTER_HORIZONTAL;
+            cell.addView(iv, ilp);
+            cell.addView(Ui.space(this, 5));
+            TextView lab = Ui.tv(this, TOOL_NAMES[i], 12f, T.DIM, false);
             lab.setMaxLines(1);
-            cell.addView(lab);
+            lab.setGravity(Gravity.CENTER);
+            cell.addView(lab, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT));
             cell.setOnClickListener(new View.OnClickListener() {
                 @Override public void onClick(View v) {
                     canvas.setTool(t);
                     Prefs.setEditorTool(EditorActivity.this, t);
                     styleTools();
+                    styleSize();
                     if (t == AnnotateView.TEXT) Ui.toast(EditorActivity.this, "點照片上要放文字的位置；點已經有的文字可以修改，按住可以拖曳");
                 }
             });
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT);
-            lp.weight = 1f;
-            lp.leftMargin = lp.rightMargin = Ui.dp(this, 3);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(Ui.dp(this, 70),
+                    ViewGroup.LayoutParams.WRAP_CONTENT);
+            lp.leftMargin = lp.rightMargin = Ui.dp(this, 4);
             toolRow.addView(cell, lp);
         }
-        box.addView(toolRow, Ui.lpW());
+        ts.addView(toolRow);
+        box.addView(ts, Ui.lpW());
 
         buildColors();
         styleTools();
-        styleLevel();
+        styleSize();
         return box;
     }
 
@@ -219,6 +244,7 @@ public class EditorActivity extends Activity {
                     canvas.setColor(c);
                     Prefs.setEditorColor(EditorActivity.this, c);
                     buildColors();
+                    styleSize();
                 }
             });
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(Ui.dp(this, 30), Ui.dp(this, 30));
@@ -239,8 +265,34 @@ public class EditorActivity extends Activity {
         }
     }
 
-    private void styleLevel() {
-        levelBtn.setText("粗細：" + LEVEL_NAMES[canvas.level()]);
+    private void styleSize() {
+        sizeText.setText((canvas.tool() == AnnotateView.TEXT ? "字級 " : "粗細 ") + canvas.size());
+        sizePreview.invalidate();
+    }
+
+    /** 粗細預覽：用目前顏色畫出實際粗細的圓點（文字工具畫一個「字」），太大時截在格子內。 */
+    private class SizePreview extends View {
+        private final android.graphics.Paint pt = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+        SizePreview() { super(EditorActivity.this); }
+        @Override protected void onDraw(android.graphics.Canvas c) {
+            super.onDraw(c);
+            float max = Math.min(getWidth(), getHeight()) - Ui.dp(EditorActivity.this, 8);
+            // 照片還沒載入時用畫面寬度估算
+            float px = canvas.hasBitmap() ? canvas.previewPx() : canvas.size() * 0.3f;
+            float d = Math.max(Ui.dp(EditorActivity.this, 2), Math.min(max, px));
+            int col = canvas.color();
+            if (canvas.tool() == AnnotateView.MARKER) col = Ui.withAlpha(col, 0x99);
+            pt.setColor(col);
+            if (canvas.tool() == AnnotateView.TEXT) {
+                pt.setTextSize(Math.max(Ui.dp(EditorActivity.this, 8), d));
+                pt.setFakeBoldText(true);
+                pt.setTextAlign(android.graphics.Paint.Align.CENTER);
+                float y = getHeight() / 2f - (pt.descent() + pt.ascent()) / 2f;
+                c.drawText("字", getWidth() / 2f, y, pt);
+            } else {
+                c.drawCircle(getWidth() / 2f, getHeight() / 2f, d / 2f, pt);
+            }
+        }
     }
 
     private void updateButtons() {
@@ -285,6 +337,8 @@ public class EditorActivity extends Activity {
                             return;
                         }
                         canvas.setBitmap(fb);
+                        // 等版面算好縮放比例後，預覽才會是實際粗細
+                        canvas.post(new Runnable() { @Override public void run() { sizePreview.invalidate(); } });
                     }
                 });
             }

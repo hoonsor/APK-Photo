@@ -41,7 +41,12 @@ public class ViewerActivity extends Activity implements Store.Listener {
     /** 由呼叫端指定左右滑動的範圍（例如某本相簿），避免把大量 id 塞進 Intent。 */
     private static ArrayList<Long> pendingContext;
 
+    private static long lastOpen = 0;
+
     public static void open(Context c, Item start, List<Item> context) {
+        long now = android.os.SystemClock.uptimeMillis();
+        if (now - lastOpen < 800) return;
+        lastOpen = now;
         ArrayList<Long> ids = new ArrayList<Long>(context == null ? 0 : context.size());
         if (context != null) for (int i = 0; i < context.size(); i++) ids.add(context.get(i).id);
         pendingContext = ids;
@@ -62,6 +67,8 @@ public class ViewerActivity extends Activity implements Store.Listener {
     private boolean chromeVisible = true;
     private boolean playing = false;
     private List<Item> awaiting;
+    /** 一般瀏覽＝true：待刪的照片一律不在左右滑的範圍。從「待刪」篩選點開待刪照片時＝false。 */
+    private boolean hidePending = true;
 
     private TextView dragHint;
     private LinearLayout undoBar;
@@ -98,7 +105,8 @@ public class ViewerActivity extends Activity implements Store.Listener {
         // 已經在待刪清單的照片不出現在左右滑的範圍裡（倬 2026-10-26）。
         // 例外：點開的那張本身就是待刪（例如從「待刪」篩選點進來），這時整份清單照原樣，才看得到它們。
         Item start = Store.get().byId.get(id);
-        if (start != null && Store.get().stateOf(start) != Db.STATE_PENDING) {
+        hidePending = start == null || Store.get().stateOf(start) != Db.STATE_PENDING;
+        if (hidePending) {
             for (int i = list.size() - 1; i >= 0; i--) {
                 Item it = list.get(i);
                 if (it.id != id && Store.get().stateOf(it) == Db.STATE_PENDING) list.remove(i);
@@ -195,9 +203,39 @@ public class ViewerActivity extends Activity implements Store.Listener {
         if (playing && video.isPlaying()) video.pause();
     }
 
+    @Override protected void onResume() {
+        super.onResume();
+        purgePending();
+    }
+
     @Override public void onStoreChanged() {
         if (list == null || list.isEmpty()) return;
+        // 照片可能在別的畫面（照片頁多選、待刪頁、另一個檢視器）被加入待刪：同步拿掉
+        if (purgePending()) return;
         updateChrome();
+    }
+
+    /**
+     * 一般瀏覽時，把清單裡所有待刪的照片拿掉（目前這張被拿掉時，下一張補上來）。
+     * @return true＝有變動且已重新顯示
+     */
+    private boolean purgePending() {
+        if (!hidePending || list == null || list.isEmpty()) return false;
+        long curId = cur().id;
+        boolean changed = false;
+        for (int i = list.size() - 1; i >= 0; i--) {
+            if (Store.get().stateOf(list.get(i)) == Db.STATE_PENDING) {
+                list.remove(i);
+                if (i < pos) pos--;
+                changed = true;
+            }
+        }
+        if (!changed) return false;
+        if (list.isEmpty()) { finish(); return true; }
+        if (pos >= list.size()) pos = list.size() - 1;
+        if (pos < 0) pos = 0;
+        if (cur().id != curId) show(); else updateChrome();
+        return true;
     }
 
     // ---------- 版面 ----------
@@ -481,16 +519,18 @@ public class ViewerActivity extends Activity implements Store.Listener {
             return;
         }
         Store.get().setState(this, it, Db.STATE_PENDING, false);
-        Store.get().notifyChanged();
         haptic();
         undoIndex = pos;
         list.remove(pos);
         if (list.isEmpty()) {
+            Store.get().notifyChanged();
             Ui.toast(this, "已加入待刪清單，這裡沒有其他照片了");
             finish();
             return;
         }
         if (pos >= list.size()) pos = list.size() - 1;   // 刪的是最後一張：退回前一張
+        // 清單與位置都調整好之後才通知（onStoreChanged 會再檢查一次待刪，這時已經沒有要拿掉的）
+        Store.get().notifyChanged();
         show();
         showUndo(it, prev);
     }

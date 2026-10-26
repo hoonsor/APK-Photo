@@ -2,6 +2,8 @@ package com.photobox.sorter;
 
 import android.content.Context;
 import android.graphics.Bitmap;
+import android.graphics.BitmapShader;
+import android.graphics.Shader;
 import android.graphics.Canvas;
 import android.graphics.Matrix;
 import android.graphics.Paint;
@@ -21,7 +23,13 @@ import java.util.ArrayList;
  */
 public class AnnotateView extends View {
 
-    public static final int PEN = 0, MARKER = 1, RECT = 2, OVAL = 3, ARROW = 4, TEXT = 5;
+    public static final int PEN = 0, MARKER = 1, RECT = 2, OVAL = 3, ARROW = 4, TEXT = 5,
+            MOSAIC_RECT = 6, MOSAIC_BRUSH = 7;
+
+    /** 馬賽克格子大小＝照片短邊的這個比例（3000px 的照片約 75px 一格）。 */
+    private static final float MOSAIC_CELL = 0.025f;
+    /** 馬賽克筆刷比畫筆粗幾倍（塗抹要大面積）。 */
+    private static final float MOSAIC_BRUSH_MUL = 5f;
 
     /** 粗細滑桿 1～100。線寬與文字大小都是「照片短邊的比例」，同一個設定在大圖小圖看起來一樣粗。 */
     public static final int SIZE_MIN = 1, SIZE_MAX = 100, SIZE_DEFAULT = 25;
@@ -84,6 +92,13 @@ public class AnnotateView extends View {
     private final Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint text = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint bmpPaint = new Paint(Paint.FILTER_BITMAP_FLAG);
+    /**
+     * 馬賽克：把原圖縮成每格一個像素的小圖，再用「不做平滑」的 BitmapShader 放大回原尺寸，
+     * 就是一格一格的色塊。框選用填滿矩形、筆刷用粗線條畫出這個 shader，兩者都只取「原圖」的顏色，
+     * 所以蓋在其他標註上時會把底下的標註也遮掉（要遮的是照片內容，這樣最保險）。
+     */
+    private final Paint mosaicFill = new Paint();
+    private final Paint mosaicStroke = new Paint();
     private final float[] pt = new float[2];
 
     public AnnotateView(Context c) {
@@ -100,8 +115,29 @@ public class AnnotateView extends View {
 
     public void setBitmap(Bitmap b) {
         base = b;
+        buildMosaic();
         layoutMatrix();
         invalidate();
+    }
+
+    private void buildMosaic() {
+        if (base == null) return;
+        int cell = Math.max(4, Math.round(minDim() * MOSAIC_CELL));
+        int sw = Math.max(1, base.getWidth() / cell), sh = Math.max(1, base.getHeight() / cell);
+        Bitmap small = Bitmap.createScaledBitmap(base, sw, sh, true);
+        BitmapShader sh2 = new BitmapShader(small, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP);
+        Matrix m = new Matrix();
+        m.setScale((float) base.getWidth() / sw, (float) base.getHeight() / sh);
+        sh2.setLocalMatrix(m);
+        for (Paint p : new Paint[]{ mosaicFill, mosaicStroke }) {
+            p.setShader(sh2);
+            p.setFilterBitmap(false);   // 不平滑，保留方格
+            p.setAntiAlias(false);
+        }
+        mosaicFill.setStyle(Paint.Style.FILL);
+        mosaicStroke.setStyle(Paint.Style.STROKE);
+        mosaicStroke.setStrokeCap(Paint.Cap.ROUND);
+        mosaicStroke.setStrokeJoin(Paint.Join.ROUND);
     }
 
     public boolean hasBitmap() { return base != null; }
@@ -117,7 +153,7 @@ public class AnnotateView extends View {
         float k = 1f;
         if (base != null) { float[] v = new float[9]; toView.getValues(v); k = v[Matrix.MSCALE_X]; }
         if (tool == TEXT) return minDim() * textFrac(size) * k;
-        return minDim() * strokeFrac(size) * (tool == MARKER ? MARKER_MUL : 1f) * k;
+        return minDim() * strokeFrac(size) * mul(tool) * k;
     }
 
     public boolean canUndo() { return !undo.isEmpty(); }
@@ -148,6 +184,12 @@ public class AnnotateView extends View {
     private void changed() {
         invalidate();
         if (listener != null) listener.onChanged();
+    }
+
+    private static float mul(int tool) {
+        if (tool == MARKER) return MARKER_MUL;
+        if (tool == MOSAIC_BRUSH) return MOSAIC_BRUSH_MUL;
+        return 1f;
     }
 
     private float minDim() {
@@ -243,6 +285,16 @@ public class AnnotateView extends View {
                 else c.drawOval(r, stroke);
                 break;
             }
+            case MOSAIC_RECT: {
+                RectF r = new RectF(Math.min(s.x0, s.x1), Math.min(s.y0, s.y1),
+                        Math.max(s.x0, s.x1), Math.max(s.y0, s.y1));
+                c.drawRect(r, mosaicFill);
+                break;
+            }
+            case MOSAIC_BRUSH:
+                mosaicStroke.setStrokeWidth(s.width);
+                c.drawPath(s.path, mosaicStroke);
+                break;
             case ARROW:
                 drawArrow(c, s);
                 break;
@@ -346,8 +398,8 @@ public class AnnotateView extends View {
                 drawing = new Shape();
                 drawing.type = tool;
                 drawing.color = color;
-                drawing.width = minDim() * strokeFrac(size) * (tool == MARKER ? MARKER_MUL : 1f);
-                if (tool == PEN || tool == MARKER) {
+                drawing.width = minDim() * strokeFrac(size) * mul(tool);
+                if (tool == PEN || tool == MARKER || tool == MOSAIC_BRUSH) {
                     drawing.path = new Path();
                     drawing.path.moveTo(x, y);
                     lastX = x;

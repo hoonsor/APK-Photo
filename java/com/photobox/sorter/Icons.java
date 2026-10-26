@@ -18,7 +18,8 @@ public final class Icons {
             ARROW_LEFT = 19, ARROW_RIGHT = 20, ARROW_UP = 21, PLUS = 22, RESTORE = 23,
             MENU = 24, MORE = 25, STAR_O = 26, PIN = 27, PHONE = 28, ALERT = 29, ALBUM = 30,
             BACKUP = 31, HELP = 32, MINUS = 33, ALBUM_ADD = 34, PAUSE = 35,
-            EDIT = 36, MARKER = 37, RECT = 38, OVAL = 39, ARROW_DIAG = 40, TEXT = 41, REDO = 42;
+            EDIT = 36, MARKER = 37, RECT = 38, OVAL = 39, ARROW_DIAG = 40, TEXT = 41, REDO = 42,
+            MOSAIC = 43, MOSAIC_BRUSH = 44;
 
     private Icons() {}
 
@@ -373,6 +374,22 @@ public final class Icons {
                     rr(f, 5f, 4.4f, 19f, 6.8f, 1f);
                     rr(f, 10.8f, 4.4f, 13.2f, 19.6f, 1f);
                     rr(f, 8.6f, 18f, 15.4f, 20.2f, 1f);
+                    break;
+                case MOSAIC: // 框選馬賽克：方框裡的棋盤格
+                    s.addRoundRect(new RectF(3.4f, 3.4f, 20.6f, 20.6f), 2f, 2f, Path.Direction.CW);
+                    rr(f, 6.2f, 6.2f, 10.2f, 10.2f, 0.6f);
+                    rr(f, 13.8f, 6.2f, 17.8f, 10.2f, 0.6f);
+                    rr(f, 10f, 10f, 14f, 14f, 0.6f);
+                    rr(f, 6.2f, 13.8f, 10.2f, 17.8f, 0.6f);
+                    rr(f, 13.8f, 13.8f, 17.8f, 17.8f, 0.6f);
+                    break;
+                case MOSAIC_BRUSH: // 筆刷馬賽克：斜向的一串方格＋筆桿
+                    rr(f, 3.2f, 15.6f, 7.2f, 19.6f, 0.6f);
+                    rr(f, 7.2f, 11.6f, 11.2f, 15.6f, 0.6f);
+                    rr(f, 3.2f, 11.6f, 7.2f, 15.6f, 0.4f);
+                    rr(f, 7.2f, 15.6f, 11.2f, 19.6f, 0.4f);
+                    s.moveTo(12.6f, 11.4f); s.lineTo(20.2f, 3.8f);
+                    s.moveTo(11.4f, 9.2f); s.lineTo(14.8f, 12.6f);
                     break;
                 case REDO: { // 復原圖示左右鏡射
                     Path mf = new Path(), ms = new Path();

@@ -31,7 +31,7 @@ import java.util.Date;
 import java.util.Locale;
 
 /**
- * 簡易照片編輯器：打字、螢光筆、畫筆、方框、圓框、箭頭，可復原／重做。
+ * 簡易照片編輯器：打字、螢光筆、畫筆、方框、圓框、箭頭、馬賽克（框選／筆刷），可復原／重做。
  * 存檔一律「另存新照片」（放在原照片同一個資料夾、拍攝時間與原照片相同，所以在照片牆上會排在原照片旁邊），
  * 不覆蓋原檔：覆蓋需要系統逐張確認，而且改壞了救不回來。
  */
@@ -50,8 +50,9 @@ public class EditorActivity extends Activity {
             0xFFFFFFFF,   // 白
             0xFF111111    // 黑
     };
-    private static final String[] TOOL_NAMES = { "畫筆", "螢光筆", "方框", "圓框", "箭頭", "文字" };
-    private static final int[] TOOL_ICONS = { Icons.EDIT, Icons.MARKER, Icons.RECT, Icons.OVAL, Icons.ARROW_DIAG, Icons.TEXT };
+    private static final String[] TOOL_NAMES = { "畫筆", "螢光筆", "方框", "圓框", "箭頭", "文字", "馬賽克框", "馬賽克筆" };
+    private static final int[] TOOL_ICONS = { Icons.EDIT, Icons.MARKER, Icons.RECT, Icons.OVAL, Icons.ARROW_DIAG, Icons.TEXT,
+            Icons.MOSAIC, Icons.MOSAIC_BRUSH };
 
     private Item item;
     private AnnotateView canvas;
@@ -215,6 +216,8 @@ public class EditorActivity extends Activity {
                     styleTools();
                     styleSize();
                     if (t == AnnotateView.TEXT) Ui.toast(EditorActivity.this, "點照片上要放文字的位置；點已經有的文字可以修改，按住可以拖曳");
+                    else if (t == AnnotateView.MOSAIC_RECT) Ui.toast(EditorActivity.this, "拖曳框出要打馬賽克的範圍");
+                    else if (t == AnnotateView.MOSAIC_BRUSH) Ui.toast(EditorActivity.this, "用手指塗抹要打馬賽克的地方，粗細用上面的滑桿調");
                 }
             });
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(Ui.dp(this, 70),
@@ -267,6 +270,11 @@ public class EditorActivity extends Activity {
 
     private void styleSize() {
         sizeText.setText((canvas.tool() == AnnotateView.TEXT ? "字級 " : "粗細 ") + canvas.size());
+        // 馬賽克框不用粗細（格子大小固定），顏色也用不到
+        boolean noSize = canvas.tool() == AnnotateView.MOSAIC_RECT;
+        sizeBar.setEnabled(!noSize);
+        sizeBar.setAlpha(noSize ? 0.35f : 1f);
+        sizeText.setAlpha(noSize ? 0.35f : 1f);
         sizePreview.invalidate();
     }
 
@@ -282,6 +290,7 @@ public class EditorActivity extends Activity {
             float d = Math.max(Ui.dp(EditorActivity.this, 2), Math.min(max, px));
             int col = canvas.color();
             if (canvas.tool() == AnnotateView.MARKER) col = Ui.withAlpha(col, 0x99);
+            if (canvas.tool() == AnnotateView.MOSAIC_RECT || canvas.tool() == AnnotateView.MOSAIC_BRUSH) col = 0xFF8A94A6;
             pt.setColor(col);
             if (canvas.tool() == AnnotateView.TEXT) {
                 pt.setTextSize(Math.max(Ui.dp(EditorActivity.this, 8), d));

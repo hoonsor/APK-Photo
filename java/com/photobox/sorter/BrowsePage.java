@@ -40,6 +40,8 @@ public class BrowsePage extends Page {
     private LinearLayout head, selHead, chipBar, yearBar, monthBar, selBar, sidebarList;
     private View chipScroll, yearScroll, monthScroll;
     private ScrollView sidebar;
+    private FrameLayout gridWrap;
+    private boolean sidebarShown = false;
     private TextView summary, floatLabel, selCount;
 
     public BrowsePage(MainActivity a) { super(a); }
@@ -134,7 +136,7 @@ public class BrowsePage extends Page {
         // 內容固定為完整寬度，相簿欄寬度動畫時內容是「被推進來」而不是被壓扁
         sidebarList.setLayoutParams(new FrameLayout.LayoutParams(sidebarWidth, ViewGroup.LayoutParams.WRAP_CONTENT));
 
-        FrameLayout gridWrap = new FrameLayout(a);
+        gridWrap = new FrameLayout(a);
         grid = new MediaGrid(a, Prefs.gridCols(a));
         grid.setEmptyText("沒有符合的照片");
         grid.setHeaderAction("逐張整理", new MediaGrid.HeaderAction() {
@@ -341,36 +343,45 @@ public class BrowsePage extends Page {
         updateSelBar();
     }
 
-    private android.animation.ValueAnimator sidebarAnim;
-
-    /** 相簿欄從左側滑進來（寬度由 0 長到定寬，照片牆同步被推窄），收起時反向。 */
+    /**
+     * 相簿欄從左側滑進來，照片牆同步被推到右邊；收起時反向。
+     *
+     * 只在開始（展開）或結束（收起）時排版一次，中間全部用 translationX 位移，交給 GPU 搬動已經畫好的畫面。
+     * v1.3.0 以前是每一格畫面都改相簿欄寬度，照片牆每格都要整個重排（格子大小、日期字級、縮圖重新縮放），
+     * 手機做不完就掉格，倬回報「動畫有點卡」。
+     */
     private void animateSidebar(final boolean show) {
-        if (sidebarAnim != null) sidebarAnim.cancel();
         final int full = sidebarWidth;
         final LinearLayout.LayoutParams lp = (LinearLayout.LayoutParams) sidebar.getLayoutParams();
-        int from = sidebar.getVisibility() == View.VISIBLE ? lp.width : 0;
-        if (show) { sidebar.setVisibility(View.VISIBLE); sidebar.scrollTo(0, 0); }
-        sidebarAnim = android.animation.ValueAnimator.ofInt(from, show ? full : 0);
-        sidebarAnim.setDuration(240);
-        sidebarAnim.setInterpolator(new android.view.animation.DecelerateInterpolator(1.6f));
-        sidebarAnim.addUpdateListener(new android.animation.ValueAnimator.AnimatorUpdateListener() {
-            @Override public void onAnimationUpdate(android.animation.ValueAnimator va) {
-                int w = (Integer) va.getAnimatedValue();
-                lp.width = w;
-                sidebar.setLayoutParams(lp);
-                // 內容跟著從左邊推進來，而不是被壓扁
-                sidebarList.setTranslationX(w - full);
-            }
-        });
-        sidebarAnim.addListener(new android.animation.AnimatorListenerAdapter() {
-            boolean cancelled = false;
-            @Override public void onAnimationCancel(android.animation.Animator an) { cancelled = true; }
-            @Override public void onAnimationEnd(android.animation.Animator an) {
-                if (!cancelled && !show) sidebar.setVisibility(View.GONE);
-                if (!cancelled) sidebarList.setTranslationX(0);
-            }
-        });
-        sidebarAnim.start();
+        android.view.animation.Interpolator ip = new android.view.animation.DecelerateInterpolator(1.8f);
+        sidebar.animate().cancel();
+        gridWrap.animate().cancel();
+        if (show) {
+            float start = sidebarShown ? sidebar.getTranslationX() : -full;
+            sidebarShown = true;
+            if (lp.width != full) { lp.width = full; sidebar.setLayoutParams(lp); }   // 唯一一次排版
+            sidebar.setVisibility(View.VISIBLE);
+            sidebar.scrollTo(0, 0);
+            sidebar.setTranslationX(start);
+            gridWrap.setTranslationX(start);
+            sidebar.animate().translationX(0).setDuration(240).setInterpolator(ip).start();
+            gridWrap.animate().translationX(0).setDuration(240).setInterpolator(ip).start();
+        } else {
+            if (!sidebarShown) return;
+            sidebarShown = false;
+            sidebar.animate().translationX(-full).setDuration(220).setInterpolator(ip).start();
+            gridWrap.animate().translationX(-full).setDuration(220).setInterpolator(ip)
+                    .withEndAction(new Runnable() {
+                        @Override public void run() {
+                            if (sidebarShown) return;   // 動畫途中又被打開
+                            sidebar.setVisibility(View.GONE);
+                            lp.width = 0;
+                            sidebar.setLayoutParams(lp);   // 唯一一次排版：照片牆恢復全寬
+                            sidebar.setTranslationX(0);
+                            gridWrap.setTranslationX(0);
+                        }
+                    }).start();
+        }
     }
 
     private void updateSelBar() {

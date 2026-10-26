@@ -25,13 +25,17 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 單張檢視：可縮放的照片、可直接播放的影片。
- * 下方：資訊／喜好／加入相簿／分享／刪除；右上 ⋮：保留、待刪、清除標記、從此整理。
+ * 單張檢視：可縮放的照片、可直接播放的影片。整理功能也在這裡（v1.3.0 起取代原本的「整理」分頁）。
+ * 照片沒放大時：左右滑換張、往上滑加入待刪（10 秒內可復原）、往下滑編輯照片；放大時滑動是拖曳。
+ * 下方：資訊／喜好／加入相簿／編輯／分享／刪除；右上 ⋮：保留、待刪、清除標記、編輯。
  */
 public class ViewerActivity extends Activity implements Store.Listener {
 
     private static final int REQ_TRASH = 5001;
     private static final int REQ_DELETE = 5002;
+    private static final int REQ_EDIT = 5003;
+    /** 往上滑加入待刪後，可以復原的秒數。 */
+    private static final int UNDO_SECONDS = 10;
 
     /** 由呼叫端指定左右滑動的範圍（例如某本相簿），避免把大量 id 塞進 Intent。 */
     private static ArrayList<Long> pendingContext;
@@ -57,6 +61,22 @@ public class ViewerActivity extends Activity implements Store.Listener {
     private boolean chromeVisible = true;
     private boolean playing = false;
     private List<Item> awaiting;
+
+    private TextView dragHint;
+    private LinearLayout undoBar;
+    private TextView undoText, undoBtn;
+    private Item undoItem;
+    private int undoPrev;
+    private int undoLeft;
+    private final android.os.Handler handler = new android.os.Handler(android.os.Looper.getMainLooper());
+    private final Runnable undoTick = new Runnable() {
+        @Override public void run() {
+            undoLeft--;
+            if (undoLeft <= 0) { hideUndo(); return; }
+            undoBtn.setText("復原（" + undoLeft + "）");
+            handler.postDelayed(this, 1000);
+        }
+    };
 
     @Override
     protected void onCreate(Bundle b) {
@@ -84,8 +104,12 @@ public class ViewerActivity extends Activity implements Store.Listener {
         img = new ZoomImageView(this);
         root.addView(img, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        img.setSwipeListener(new ZoomImageView.SwipeListener() {
-            @Override public void onSwipe(int dir) { step(dir); }
+        img.setGestureListener(new ZoomImageView.GestureListener() {
+            @Override public void onPage(int dir) { step(dir); }
+            @Override public void onSwipeUp() { swipeToPending(); }
+            @Override public void onSwipeDown() { openEditor(); }
+            @Override public void onDragProgress(int axis, float dx, float dy, float p) { showDragHint(axis, dy, p); }
+            @Override public void onDragEnd() { dragHint.setVisibility(View.GONE); }
         });
         img.setTapListener(new ZoomImageView.TapListener() {
             @Override public void onSingleTap() { toggleChrome(); }
@@ -122,13 +146,33 @@ public class ViewerActivity extends Activity implements Store.Listener {
         blp.gravity = Gravity.BOTTOM;
         root.addView(bottomBar, blp);
 
+        dragHint = Ui.tv(this, "", 15f, 0xFFFFFFFF, true);
+        dragHint.setPadding(Ui.dp(this, 18), Ui.dp(this, 10), Ui.dp(this, 18), Ui.dp(this, 10));
+        dragHint.setVisibility(View.GONE);
+        FrameLayout.LayoutParams hlp = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        hlp.gravity = Gravity.CENTER;
+        root.addView(dragHint, hlp);
+
+        undoBar = buildUndoBar();
+        FrameLayout.LayoutParams ulp = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        ulp.gravity = Gravity.BOTTOM;
+        ulp.leftMargin = ulp.rightMargin = Ui.dp(this, 12);
+        root.addView(undoBar, ulp);
+
         root.setFitsSystemWindows(true);
         setContentView(root);
         Store.get().addListener(this);
         show();
+        if (!Prefs.viewerHintShown(this)) {
+            Prefs.setViewerHintShown(this);
+            Ui.toast(this, "往上滑：加入待刪　往下滑：編輯照片\n照片放大時滑動是拖曳，縮回原大小才會觸發");
+        }
     }
 
     @Override protected void onDestroy() {
+        handler.removeCallbacks(undoTick);
         Store.get().removeListener(this);
         stopVideo();
         super.onDestroy();
@@ -215,6 +259,9 @@ public class ViewerActivity extends Activity implements Store.Listener {
                 one.add(cur());
                 AlbumDialogs.addTo(ViewerActivity.this, one, null);
             }
+        }));
+        l.addView(action(Icons.EDIT, "編輯", 0xFFFFFFFF, new View.OnClickListener() {
+            @Override public void onClick(View v) { openEditor(); }
         }));
         l.addView(action(Icons.SHARE, "分享", 0xFFFFFFFF, new View.OnClickListener() {
             @Override public void onClick(View v) {
@@ -390,7 +437,7 @@ public class ViewerActivity extends Activity implements Store.Listener {
         pm.getMenu().add(0, 1, 0, "標記為保留");
         pm.getMenu().add(0, 2, 1, "加入待刪清單");
         pm.getMenu().add(0, 3, 2, "清除標記");
-        pm.getMenu().add(0, 4, 3, "從這張開始整理（往舊／往新）…");
+        if (!cur().video) pm.getMenu().add(0, 4, 3, "編輯照片（文字、螢光筆、框線、箭頭）");
         if (cur().video) pm.getMenu().add(0, 5, 4, "用其他 App 播放");
         pm.setOnMenuItemClickListener(new PopupMenu.OnMenuItemClickListener() {
             @Override public boolean onMenuItemClick(MenuItem m) {
@@ -398,7 +445,7 @@ public class ViewerActivity extends Activity implements Store.Listener {
                     case 1: mark(Db.STATE_KEPT); break;
                     case 2: mark(Db.STATE_PENDING); break;
                     case 3: mark(Db.STATE_NONE); break;
-                    case 4: sortFromHere(); break;
+                    case 4: openEditor(); break;
                     case 5: openExternally(cur()); break;
                 }
                 return true;
@@ -407,10 +454,144 @@ public class ViewerActivity extends Activity implements Store.Listener {
         pm.show();
     }
 
-    /** 回到整理頁，從目前這一張開始往舊（或往新）的照片整理。 */
-    private void sortFromHere() {
-        SortStartDialog.show(this, cur(), new Runnable() {
-            @Override public void run() { finish(); }
+    // ---------- 往上滑：加入待刪（可復原） ----------
+
+    private void swipeToPending() {
+        final Item it = cur();
+        int prev = Store.get().stateOf(it);
+        if (prev == Db.STATE_PENDING) {
+            Ui.toast(this, "這張已經在待刪清單裡");
+        } else {
+            Store.get().setState(this, it, Db.STATE_PENDING, false);
+            Store.get().notifyChanged();
+            haptic();
+            showUndo(it, prev);
+        }
+        // 跟原本的整理一樣，處理完自動看下一張
+        if (pos < list.size() - 1) { pos++; show(); }
+        else { updateChrome(); Ui.toast(this, "已經是最後一張"); }
+    }
+
+    private LinearLayout buildUndoBar() {
+        LinearLayout bar = Ui.rowH(this);
+        bar.setBackground(Ui.round(0xF21E242F, Ui.dp(this, 14), Ui.withAlpha(T.TRASH, 0x99), Ui.dp(this, 1)));
+        bar.setPadding(Ui.dp(this, 16), Ui.dp(this, 6), Ui.dp(this, 6), Ui.dp(this, 6));
+        bar.setElevation(Ui.dp(this, 8));
+        ImageView ic = new ImageView(this);
+        ic.setImageDrawable(Icons.get(Icons.TRASH, T.TRASH));
+        bar.addView(ic, new LinearLayout.LayoutParams(Ui.dp(this, 20), Ui.dp(this, 20)));
+        undoText = Ui.tv(this, "", 14f, T.TEXT, false);
+        undoText.setMaxLines(2);
+        LinearLayout.LayoutParams tlp = Ui.lpWeight();
+        tlp.leftMargin = Ui.dp(this, 10);
+        bar.addView(undoText, tlp);
+        undoBtn = Ui.tv(this, "復原", 14.5f, T.PRIMARY, true);
+        undoBtn.setPadding(Ui.dp(this, 14), Ui.dp(this, 10), Ui.dp(this, 14), Ui.dp(this, 10));
+        undoBtn.setBackground(Ui.tappable(Ui.withAlpha(T.PRIMARY, 0x22), Ui.dp(this, 10),
+                Ui.withAlpha(T.PRIMARY, 0x88), Ui.dp(this, 1)));
+        undoBtn.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { undoPending(); }
+        });
+        bar.addView(undoBtn);
+        bar.setVisibility(View.GONE);
+        return bar;
+    }
+
+    private void showUndo(Item it, int prev) {
+        undoItem = it;
+        undoPrev = prev;
+        undoLeft = UNDO_SECONDS;
+        undoText.setText("已加入待刪清單\n到「待刪」分頁再一起丟進垃圾桶");
+        undoBtn.setText("復原（" + undoLeft + "）");
+        // 放在下方按鈕列的上面，不擋住按鈕
+        FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) undoBar.getLayoutParams();
+        lp.bottomMargin = (chromeVisible ? bottomBar.getHeight() : 0) + Ui.dp(this, 10);
+        undoBar.setLayoutParams(lp);
+        undoBar.animate().cancel();
+        undoBar.setVisibility(View.VISIBLE);
+        undoBar.setAlpha(0f);
+        undoBar.animate().alpha(1f).setDuration(150).start();
+        handler.removeCallbacks(undoTick);
+        handler.postDelayed(undoTick, 1000);
+    }
+
+    private void hideUndo() {
+        handler.removeCallbacks(undoTick);
+        undoItem = null;
+        if (undoBar.getVisibility() != View.VISIBLE) return;
+        undoBar.animate().alpha(0f).setDuration(150).withEndAction(new Runnable() {
+            @Override public void run() { undoBar.setVisibility(View.GONE); }
+        }).start();
+    }
+
+    private void undoPending() {
+        Item it = undoItem;
+        if (it == null) return;
+        Store.get().setState(this, it, undoPrev, false);
+        Store.get().notifyChanged();
+        hideUndo();
+        for (int i = 0; i < list.size(); i++) {
+            if (list.get(i).id == it.id) { pos = i; break; }
+        }
+        show();
+        Ui.toast(this, "已復原，這張不在待刪清單了");
+    }
+
+    private void haptic() {
+        if (!Prefs.hapticOn(this)) return;
+        try {
+            android.os.Vibrator v = (android.os.Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
+            if (v != null && v.hasVibrator()) v.vibrate(android.os.VibrationEffect.createOneShot(12, 60));
+        } catch (Throwable ignored) { }
+    }
+
+    private void showDragHint(int axis, float dy, float p) {
+        if (axis != Swipe.AXIS_Y || p < 0.15f) { dragHint.setVisibility(View.GONE); return; }
+        boolean up = dy < 0;
+        boolean ready = p >= 1f;
+        String s;
+        int color;
+        if (up) {
+            s = ready ? "放開：加入待刪" : "往上滑：加入待刪";
+            color = T.TRASH;
+        } else if (cur().video) {
+            s = "影片不能編輯";
+            color = T.SKIP;
+        } else {
+            s = ready ? "放開：編輯照片" : "往下滑：編輯照片";
+            color = T.PRIMARY;
+        }
+        dragHint.setText(s);
+        dragHint.setBackground(Ui.round(Ui.withAlpha(color, ready ? 0xF0 : 0xA0), Ui.dp(this, 22)));
+        dragHint.setAlpha(Math.min(1f, 0.4f + p * 0.6f));
+        dragHint.setVisibility(View.VISIBLE);
+    }
+
+    // ---------- 往下滑：編輯 ----------
+
+    private void openEditor() {
+        Item it = cur();
+        if (it.video) { Ui.toast(this, "影片目前不能編輯，只能編輯照片"); return; }
+        stopVideo();
+        Intent in = new Intent(this, EditorActivity.class);
+        in.putExtra("id", it.id);
+        startActivityForResult(in, REQ_EDIT);
+    }
+
+    /** 編輯後另存的新照片：重新掃描後插在原照片後面，往左滑就看得到。 */
+    private void onEdited(final long newId) {
+        final long origId = cur().id;
+        Store.get().load(this, new Runnable() {
+            @Override public void run() {
+                Item n = Store.get().byId.get(newId);
+                if (n == null || isFinishing()) return;
+                int at = -1;
+                for (int i = 0; i < list.size(); i++) if (list.get(i).id == origId) { at = i; break; }
+                if (at < 0) return;
+                list.add(at + 1, n);
+                pos = at;
+                updateChrome();
+            }
         });
     }
 
@@ -442,6 +623,10 @@ public class ViewerActivity extends Activity implements Store.Listener {
     @Override
     protected void onActivityResult(int req, int res, Intent data) {
         super.onActivityResult(req, res, data);
+        if (req == REQ_EDIT) {
+            if (res == RESULT_OK && data != null) onEdited(data.getLongExtra("newId", -1));
+            return;
+        }
         if (req != REQ_TRASH && req != REQ_DELETE) return;
         if (res == RESULT_OK && awaiting != null) {
             if (req == REQ_TRASH) Db.get(this).addTrashed(awaiting);

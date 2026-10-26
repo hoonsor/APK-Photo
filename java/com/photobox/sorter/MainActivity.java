@@ -26,7 +26,8 @@ public class MainActivity extends Activity implements Store.Listener {
     public static final int REQ_EXPORT = 3001;
     public static final int REQ_IMPORT = 3002;
 
-    public static final int TAB_PHOTOS = 0, TAB_ALBUMS = 1, TAB_SORT = 2, TAB_TRASH = 3, TAB_MORE = 4;
+    // v1.3.0 起沒有「整理」分頁：整理改在單張檢視用上下滑完成（見 ViewerActivity）
+    public static final int TAB_PHOTOS = 0, TAB_ALBUMS = 1, TAB_TRASH = 2, TAB_MORE = 3;
 
     private FrameLayout content;
     private LinearLayout nav;
@@ -42,7 +43,6 @@ public class MainActivity extends Activity implements Store.Listener {
     private String awaitingMovePath;
     private Runnable afterAction;
 
-    public SortPage sortPage;
     public BrowsePage browsePage;
     public TrashPage trashPage;
     public SettingsPage settingsPage;
@@ -194,7 +194,6 @@ public class MainActivity extends Activity implements Store.Listener {
         }
         nav.setVisibility(View.VISIBLE);
         if (pages.isEmpty()) {
-            sortPage = new SortPage(this);
             browsePage = new BrowsePage(this);
             trashPage = new TrashPage(this);
             settingsPage = new SettingsPage(this);
@@ -203,7 +202,6 @@ public class MainActivity extends Activity implements Store.Listener {
             // 順序必須與 TAB_* 常數一致
             pages.add(browsePage);
             pages.add(albumsPage);
-            pages.add(sortPage);
             pages.add(trashPage);
             pages.add(morePage);
         }
@@ -230,8 +228,8 @@ public class MainActivity extends Activity implements Store.Listener {
         LinearLayout bar = Ui.rowH(this);
         bar.setPadding(Ui.dp(this, 6), Ui.dp(this, 8), Ui.dp(this, 6), Ui.dp(this, 9));
 
-        String[] labels = { "照片", "相簿", "整理", "待刪", "更多" };
-        int[] icons = { Icons.IMAGE, Icons.ALBUM, Icons.SORT, Icons.TRASH, Icons.MORE };
+        String[] labels = { "照片", "相簿", "待刪", "更多" };
+        int[] icons = { Icons.IMAGE, Icons.ALBUM, Icons.TRASH, Icons.MORE };
         for (int i = 0; i < labels.length; i++) {
             final int idx = i;
             LinearLayout cell = Ui.col(this);
@@ -312,22 +310,16 @@ public class MainActivity extends Activity implements Store.Listener {
     protected void onResume() {
         super.onResume();
         UpdateDialog.resume();
-        long[] req = Store.get().consumeSortStartRequest();
-        if (req != null) {
-            select(TAB_SORT);
-            if (sortPage != null) sortPage.startAt(req[0], req[1] == 1, (int) req[2]);
-        }
     }
 
-    /** 從指定的那一張開始整理（由檢視器觸發）。 */
-    public void goSortAt(long id) {
-        select(TAB_SORT);
-        if (sortPage != null) sortPage.startAt(id);
-    }
-
-    public void goSortWith(String album, int ym) {
-        select(TAB_SORT);
-        if (sortPage != null) sortPage.setSource(album, ym);
+    /**
+     * 逐張整理：從 start 這張打開單張檢視，左右滑的範圍是 items（取代原本的整理分頁）。
+     * 在單張檢視裡往上滑加入待刪、往下滑編輯。
+     */
+    public void reviewFrom(Item start, java.util.List<Item> items, String label) {
+        if (start == null || items == null || items.isEmpty()) { Ui.toast(this, "這裡沒有照片"); return; }
+        ViewerActivity.open(this, start, items);
+        if (label != null) Ui.toast(this, "逐張整理「" + label + "」，共 " + items.size() + " 張：往上滑待刪、往下滑編輯");
     }
 
     @Override public void onBackPressed() {

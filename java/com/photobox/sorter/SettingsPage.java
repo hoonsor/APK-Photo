@@ -14,7 +14,6 @@ import android.widget.TextView;
 
 public class SettingsPage extends Page {
 
-    private LinearLayout gestureBox;
     private TextView statsText;
 
     public SettingsPage(MainActivity a) { super(a); }
@@ -33,29 +32,41 @@ public class SettingsPage extends Page {
         root.addView(Ui.tv(a, "設定", 21f, T.TEXT, true), Ui.lpW());
         root.addView(Ui.space(a, 16));
 
-        // ---- 手勢 ----
+        // ---- 手勢（v1.3.0 起固定，不再可設定） ----
         LinearLayout card1 = card();
-        card1.addView(sectionTitle("滑動手勢", "每個方向要做什麼，都可以自己決定"));
-        card1.addView(Ui.space(a, 6));
-        gestureBox = Ui.col(a);
-        card1.addView(gestureBox, Ui.lpW());
-        card1.addView(Ui.space(a, 8));
-        TextView reset = Ui.btnGhost(a, "恢復預設配置", T.DIM);
-        reset.setOnClickListener(new View.OnClickListener() {
-            @Override public void onClick(View v) {
-                Prefs.resetGestures(a);
-                rebuildGestures();
-                Ui.toast(a, "已恢復預設");
-            }
-        });
-        card1.addView(reset, Ui.lpW());
+        card1.addView(sectionTitle("單張檢視的手勢", "在照片頁點開任一張照片後使用"));
+        String[][] g = {
+                { "往左滑／往右滑", "下一張／上一張" },
+                { "往上滑", "加入待刪清單（10 秒內可以按「復原」）" },
+                { "往下滑", "編輯照片（文字、螢光筆、框線、箭頭）" },
+                { "照片放大時", "滑動是拖曳，縮回原大小（或點兩下）才會觸發上面的動作" }
+        };
+        int[] gi = { Icons.ARROW_LEFT, Icons.ARROW_UP, Icons.ARROW_DOWN, Icons.SEARCH };
+        for (int i = 0; i < g.length; i++) {
+            LinearLayout row = Ui.rowH(a);
+            row.setBackground(Ui.round(T.SURFACE2, Ui.dp(a, 12)));
+            row.setPadding(Ui.dp(a, 12), Ui.dp(a, 11), Ui.dp(a, 12), Ui.dp(a, 11));
+            ImageView arrow = new ImageView(a);
+            arrow.setImageDrawable(Icons.get(gi[i], T.DIM));
+            row.addView(arrow, new LinearLayout.LayoutParams(Ui.dp(a, 20), Ui.dp(a, 20)));
+            LinearLayout tx = Ui.col(a);
+            tx.addView(Ui.tv(a, g[i][0], 14.5f, T.TEXT, true), Ui.lpW());
+            tx.addView(Ui.space(a, 2));
+            tx.addView(Ui.tv(a, g[i][1], 12.5f, T.DIM, false), Ui.lpW());
+            LinearLayout.LayoutParams tlp = Ui.lpWeight();
+            tlp.leftMargin = Ui.dp(a, 10);
+            row.addView(tx, tlp);
+            LinearLayout.LayoutParams rlp = Ui.lpW();
+            rlp.bottomMargin = Ui.dp(a, 8);
+            card1.addView(row, rlp);
+        }
         root.addView(card1, Ui.lpW());
         root.addView(Ui.space(a, 14));
 
         // ---- 內容 ----
         LinearLayout card2 = card();
         card2.addView(sectionTitle("內容與操作", null));
-        card2.addView(switchRow("顯示影片", "關閉後照片頁、相簿與整理都只顯示照片",
+        card2.addView(switchRow("顯示影片", "關閉後照片頁與相簿都只顯示照片",
                 Prefs.showVideo(a), new CompoundButton.OnCheckedChangeListener() {
             @Override public void onCheckedChanged(CompoundButton b, boolean on) {
                 Prefs.setShowVideo(a, on);
@@ -112,7 +123,6 @@ public class SettingsPage extends Page {
                                 Store.get().state.clear();
                                 Store.get().clearUndo();
                                 Store.get().notifyChanged();
-                                if (a.sortPage != null) a.sortPage.rebuildDeck();
                                 refreshStats();
                                 Ui.toast(a, "已清除");
                             }
@@ -160,7 +170,6 @@ public class SettingsPage extends Page {
         card4.addView(about, Ui.lpW());
         root.addView(card4, Ui.lpW());
 
-        rebuildGestures();
         return sv;
     }
 
@@ -210,64 +219,6 @@ public class SettingsPage extends Page {
         return l;
     }
 
-    private void rebuildGestures() {
-        if (gestureBox == null) return;
-        gestureBox.removeAllViews();
-        for (int d = 0; d < 4; d++) {
-            final int dir = d;
-            int act = Prefs.action(a, dir);
-
-            LinearLayout row = Ui.rowH(a);
-            row.setBackground(Ui.tappable(T.SURFACE2, Ui.dp(a, 12)));
-            row.setPadding(Ui.dp(a, 12), Ui.dp(a, 11), Ui.dp(a, 12), Ui.dp(a, 11));
-            row.setOnClickListener(new View.OnClickListener() {
-                @Override public void onClick(View v) { pickAction(dir); }
-            });
-
-            ImageView arrow = new ImageView(a);
-            int ai = Icons.ARROW_LEFT;
-            if (dir == Prefs.RIGHT) ai = Icons.ARROW_RIGHT;
-            if (dir == Prefs.UP) ai = Icons.ARROW_UP;
-            if (dir == Prefs.DOWN) ai = Icons.ARROW_DOWN;
-            arrow.setImageDrawable(Icons.get(ai, T.DIM));
-            row.addView(arrow, new LinearLayout.LayoutParams(Ui.dp(a, 20), Ui.dp(a, 20)));
-
-            TextView name = Ui.tv(a, Prefs.DIR_NAMES[dir], 14.5f, T.TEXT, false);
-            LinearLayout.LayoutParams nlp = new LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            nlp.leftMargin = Ui.dp(a, 10);
-            row.addView(name, nlp);
-            row.addView(Ui.grow(a));
-
-            TextView val = Ui.tv(a, Prefs.ACT_NAMES[act], 13.5f, Prefs.color(act), true);
-            row.addView(val);
-
-            ImageView chev = new ImageView(a);
-            chev.setImageDrawable(Icons.get(Icons.CHEVRON, T.FAINT));
-            LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(Ui.dp(a, 16), Ui.dp(a, 16));
-            clp.leftMargin = Ui.dp(a, 6);
-            row.addView(chev, clp);
-
-            LinearLayout.LayoutParams rlp = Ui.lpW();
-            rlp.bottomMargin = Ui.dp(a, 8);
-            gestureBox.addView(row, rlp);
-        }
-    }
-
-    private void pickAction(final int dir) {
-        new AlertDialog.Builder(a, android.R.style.Theme_Material_Dialog_Alert)
-                .setTitle(Prefs.DIR_NAMES[dir] + " 要做什麼？")
-                .setItems(Prefs.ACT_NAMES, new DialogInterface.OnClickListener() {
-                    @Override public void onClick(DialogInterface d, int w) {
-                        Prefs.setAction(a, dir, w);
-                        rebuildGestures();
-                        if (a.sortPage != null) a.sortPage.onShow();
-                    }
-                })
-                .setNegativeButton("取消", null)
-                .show();
-    }
-
     private LinearLayout switchRow(String title, String desc, boolean on,
                                    CompoundButton.OnCheckedChangeListener l) {
         LinearLayout row = Ui.rowH(a);
@@ -303,6 +254,6 @@ public class SettingsPage extends Page {
                 + "尚未整理：" + s.count(Db.STATE_NONE));
     }
 
-    @Override public void onShow() { rebuildGestures(); refreshStats(); }
+    @Override public void onShow() { refreshStats(); }
     @Override public void onStoreChanged() { refreshStats(); }
 }

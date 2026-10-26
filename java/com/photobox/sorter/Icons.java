@@ -17,7 +17,8 @@ public final class Icons {
             COPIES = 13, CHECK = 14, CHEVRON = 15, ARROW_DOWN = 16, IMAGE = 17, CALENDAR = 18,
             ARROW_LEFT = 19, ARROW_RIGHT = 20, ARROW_UP = 21, PLUS = 22, RESTORE = 23,
             MENU = 24, MORE = 25, STAR_O = 26, PIN = 27, PHONE = 28, ALERT = 29, ALBUM = 30,
-            BACKUP = 31, HELP = 32, MINUS = 33, ALBUM_ADD = 34, PAUSE = 35;
+            BACKUP = 31, HELP = 32, MINUS = 33, ALBUM_ADD = 34, PAUSE = 35,
+            EDIT = 36, MARKER = 37, RECT = 38, OVAL = 39, ARROW_DIAG = 40, TEXT = 41, REDO = 42;
 
     private Icons() {}
 
@@ -346,6 +347,44 @@ public final class Icons {
                     rr(f, 6.4f, 5f, 10.2f, 19f, 1.2f);
                     rr(f, 13.8f, 5f, 17.6f, 19f, 1.2f);
                     break;
+                case EDIT:   // 鉛筆
+                    s.moveTo(4.6f, 19.4f); s.lineTo(5.6f, 14.8f); s.lineTo(15.6f, 4.8f);
+                    s.lineTo(19.2f, 8.4f); s.lineTo(9.2f, 18.4f); s.close();
+                    s.moveTo(13.2f, 7.2f); s.lineTo(16.8f, 10.8f);
+                    break;
+                case MARKER: { // 螢光筆：斜放的筆身＋下方一道色帶
+                    s.moveTo(9.6f, 15.6f); s.lineTo(17.8f, 4.6f); s.lineTo(20.4f, 6.6f);
+                    s.lineTo(12.2f, 17.6f); s.close();
+                    s.moveTo(9.6f, 15.6f); s.lineTo(8.2f, 18.6f); s.lineTo(10.4f, 18.4f); s.lineTo(12.2f, 17.6f);
+                    rr(f, 3f, 19.6f, 14f, 21.6f, 1f);
+                    break;
+                }
+                case RECT:
+                    s.addRoundRect(new RectF(4f, 6f, 20f, 18f), 1.6f, 1.6f, Path.Direction.CW);
+                    break;
+                case OVAL:
+                    s.addOval(new RectF(3.6f, 5.6f, 20.4f, 18.4f), Path.Direction.CW);
+                    break;
+                case ARROW_DIAG:
+                    s.moveTo(5f, 19f); s.lineTo(16.4f, 7.6f);
+                    f.moveTo(19.6f, 4.4f); f.lineTo(18.6f, 12.2f); f.lineTo(11.8f, 5.4f); f.close();
+                    break;
+                case TEXT:
+                    rr(f, 5f, 4.4f, 19f, 6.8f, 1f);
+                    rr(f, 10.8f, 4.4f, 13.2f, 19.6f, 1f);
+                    rr(f, 8.6f, 18f, 15.4f, 20.2f, 1f);
+                    break;
+                case REDO: { // 復原圖示左右鏡射
+                    Path mf = new Path(), ms = new Path();
+                    build(UNDO, mf, ms);
+                    Matrix mm = new Matrix();
+                    mm.setScale(-1f, 1f, 12f, 12f);
+                    mf.transform(mm);
+                    ms.transform(mm);
+                    f.addPath(mf);
+                    s.addPath(ms);
+                    break;
+                }
                 case IMAGE:
                 default: {
                     Path b = new Path();

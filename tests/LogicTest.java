@@ -125,6 +125,23 @@ public class LogicTest {
         ok(UpdateVersion.pickApk(new String[]{"notes.txt", "x.APK"}, "PhotoSortBox-") == 1, "fallback first apk");
         ok(UpdateVersion.pickApk(new String[]{"notes.txt", null}, "PhotoSortBox-") == -1, "no apk");
 
+        // ---------- Swipe（單張檢視：左右換張、上滑待刪、下滑編輯） ----------
+        float W = 1080, H = 2000, FV = 2000;
+        ok(Swipe.lockAxis(5, 5, 12) == Swipe.AXIS_NONE, "under slop no axis");
+        ok(Swipe.lockAxis(30, 10, 12) == Swipe.AXIS_X && Swipe.lockAxis(10, -30, 12) == Swipe.AXIS_Y, "lock by larger");
+        ok(Swipe.decide(Swipe.AXIS_X, -300, 0, 0, 0, W, H, FV) == Swipe.NEXT, "finger left = next");
+        ok(Swipe.decide(Swipe.AXIS_X, 300, 0, 0, 0, W, H, FV) == Swipe.PREV, "finger right = prev");
+        ok(Swipe.decide(Swipe.AXIS_X, -100, 0, 0, 0, W, H, FV) == Swipe.NONE, "short horizontal springs back");
+        ok(Swipe.decide(Swipe.AXIS_Y, 0, -400, 0, 0, W, H, FV) == Swipe.UP, "up = pending");
+        ok(Swipe.decide(Swipe.AXIS_Y, 0, 400, 0, 0, W, H, FV) == Swipe.DOWN, "down = edit");
+        ok(Swipe.decide(Swipe.AXIS_Y, 0, -200, 0, 0, W, H, FV) == Swipe.NONE, "short vertical springs back");
+        ok(Swipe.decide(Swipe.AXIS_Y, 0, -150, 0, -3000, W, H, FV) == Swipe.UP, "fast flick counts");
+        ok(Swipe.decide(Swipe.AXIS_Y, 0, -150, 0, 3000, W, H, FV) == Swipe.NONE, "flick opposite ignored");
+        ok(Swipe.decide(Swipe.AXIS_Y, 0, -50, 0, -3000, W, H, FV) == Swipe.NONE, "tiny flick ignored");
+        ok(Swipe.decide(Swipe.AXIS_Y, -900, -10, 0, 0, W, H, FV) == Swipe.NONE, "locked axis ignores other");
+        ok(Swipe.decide(Swipe.AXIS_NONE, -900, -900, 0, 0, W, H, FV) == Swipe.NONE, "no axis no action");
+        ok(Swipe.progress(Swipe.AXIS_Y, 0, -160, W, H) > 0.49f && Swipe.progress(Swipe.AXIS_Y, 0, -900, W, H) == 1f, "progress");
+
         System.out.println(checks + " checks, " + fails + " failures");
         if (fails > 0) System.exit(1);
     }

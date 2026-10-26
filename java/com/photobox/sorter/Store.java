@@ -141,33 +141,6 @@ public class Store {
 
     public void clearUndo() { undoStack.clear(); }
 
-    // ---- 從指定的某一張開始整理 ----
-
-    private long sortStartId = 0;
-    private boolean sortNewer = false;
-    private int sortInclude = -1;   // -1 自動（舊行為）、0 只看未整理、1 全部
-
-    /** 舊行為：往舊的整理，包含與否依那張是否已整理過自動決定。 */
-    public void requestSortStart(long id) { requestSortStart(id, false, -1); }
-
-    /**
-     * @param newer   true＝從這張往較新的照片整理；false＝往較舊的
-     * @param include 0＝只整理還沒整理過的；1＝全部（含已保留／待刪）；-1＝自動
-     */
-    public void requestSortStart(long id, boolean newer, int include) {
-        sortStartId = id;
-        sortNewer = newer;
-        sortInclude = include;
-    }
-
-    /** @return {id, newer(1/0), include}；沒有請求時回傳 null。 */
-    public long[] consumeSortStartRequest() {
-        if (sortStartId <= 0) return null;
-        long[] r = { sortStartId, sortNewer ? 1 : 0, sortInclude };
-        sortStartId = 0;
-        return r;
-    }
-
     // ---- 統計 ----
 
     public int count(int s) {
@@ -301,19 +274,6 @@ public class Store {
             Collections.sort(out, new Comparator<Item>() {
                 @Override public int compare(Item a, Item b) { return Long.compare(b.size, a.size); }
             });
-        }
-        return out;
-    }
-
-    /** 整理模式要處理的清單：尚未整理過的照片。 */
-    public ArrayList<Item> deck(String album, int ym) {
-        ArrayList<Item> out = new ArrayList<Item>();
-        for (int i = 0; i < all.size(); i++) {
-            Item it = all.get(i);
-            if (stateOf(it) != Db.STATE_NONE) continue;
-            if (album != null && !album.equals(it.bucket)) continue;
-            if (ym > 0 && it.ym != ym) continue;
-            out.add(it);
         }
         return out;
     }

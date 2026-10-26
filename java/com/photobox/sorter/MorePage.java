@@ -66,7 +66,7 @@ public class MorePage extends Page {
         }), Ui.lpW());
         container.addView(menuRow(Icons.BACKUP, "備份與還原", "相簿與整理進度存成檔案，換手機或重裝也不怕", go(SUB_BACKUP, fromDrawer)), Ui.lpW());
         container.addView(Ui.divider(a));
-        container.addView(menuRow(Icons.SLIDERS, "設定", "滑動手勢、影片、刪除方式", go(SUB_SETTINGS, fromDrawer)), Ui.lpW());
+        container.addView(menuRow(Icons.SLIDERS, "設定", "手勢說明、影片、刪除方式、App 更新", go(SUB_SETTINGS, fromDrawer)), Ui.lpW());
         container.addView(menuRow(Icons.HELP, "說明", "相簿與資料夾的差別、常見問題", go(SUB_HELP, fromDrawer)), Ui.lpW());
     }
 
@@ -171,7 +171,7 @@ public class MorePage extends Page {
             if (!covers.containsKey(all.get(i).bucket)) covers.put(all.get(i).bucket, all.get(i));
         }
         LinearLayout col = Ui.col(a);
-        TextView hint = Ui.tv(a, "點資料夾在照片頁只看那個資料夾；長按可從它開始整理。", 12.5f, T.FAINT, false);
+        TextView hint = Ui.tv(a, "點資料夾在照片頁只看那個資料夾；長按直接逐張整理（往上滑待刪、往下滑編輯）。", 12.5f, T.FAINT, false);
         hint.setPadding(Ui.dp(a, 16), Ui.dp(a, 2), Ui.dp(a, 16), Ui.dp(a, 8));
         col.addView(hint, Ui.lpW());
 
@@ -222,8 +222,10 @@ public class MorePage extends Page {
                 });
                 card.setOnLongClickListener(new View.OnLongClickListener() {
                     @Override public boolean onLongClick(View v) {
-                        a.goSortWith(name, 0);
-                        Ui.toast(a, "從「" + name + "」資料夾開始整理");
+                        ArrayList<Item> in = new ArrayList<Item>();
+                        ArrayList<Item> all = Store.get().all;
+                        for (int k = 0; k < all.size(); k++) if (name.equals(all.get(k).bucket)) in.add(all.get(k));
+                        a.reviewFrom(in.isEmpty() ? null : in.get(0), in, name);
                         return true;
                     }
                 });
@@ -350,9 +352,17 @@ public class MorePage extends Page {
                 { "怎麼分享到 LINE、Dropbox、雲端硬碟？",
                   "多選後按右上角的分享圖示，或在相簿裡按「分享相簿」，會跳出系統分享選單，"
                 + "選 LINE、Dropbox、Google 雲端硬碟等即可。" },
-                { "怎麼從某一張照片開始整理？",
-                  "在「整理」分頁按上方的「從某張開始」，點想開始的那一張，再選往舊或往新、只整理未整理的或全部。"
-                + "也可以在照片頁點開那一張，按右上角 ⋮ →「從這張開始整理」。整理頁上方會顯示目前的方向。" },
+                { "怎麼整理照片？（原本的「整理」分頁去哪了？）",
+                  "v1.3.0 起整理直接在照片頁完成：點開任一張照片（從哪一張開始都可以），"
+                + "往左滑看下一張（較舊）、往右滑看上一張（較新），"
+                + "往上滑加入待刪清單（下方會出現「復原」按鈕 10 秒），往下滑編輯照片。\n"
+                + "照片放大時滑動是拖曳，縮回原大小（點兩下）才會觸發這些動作。\n"
+                + "只想看還沒整理過的：在照片頁的篩選選「未整理」再點開照片，左右滑就只會在未整理的照片之間切換。\n"
+                + "也可以點月份標題右邊的「逐張整理」，或在「更多 → 資料夾」長按資料夾。" },
+                { "編輯照片能做什麼？",
+                  "往下滑（或按下方「編輯」）進入編輯：畫筆、螢光筆、方框、圓框、箭頭、文字，可以換顏色和粗細，"
+                + "右上角可以復原／重做。文字工具：點照片放文字，點已經有的文字可以修改或刪除，按住可以拖曳。\n"
+                + "按「另存」會存成一張新照片（放在原照片同一個資料夾、排在原照片旁邊），原照片不會被改到。" },
                 { "刪除會不會不小心刪錯？",
                   "不會直接刪。照片會先進「待刪」清單，按清空時才交給 Android 系統確認，"
                 + "預設還會先進系統垃圾桶，30 天內都救得回來。" },

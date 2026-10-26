@@ -6,12 +6,31 @@ import android.graphics.RectF;
 import android.view.GestureDetector;
 import android.view.MotionEvent;
 import android.view.ScaleGestureDetector;
+import android.view.VelocityTracker;
+import android.view.ViewConfiguration;
 import android.widget.ImageView;
 
-/** 可雙指縮放、拖曳、雙擊放大的圖片檢視元件。 */
+/**
+ * 可雙指縮放、拖曳、雙擊放大的圖片檢視元件。
+ *
+ * 手勢規則（倬 2026-10-26 決定）：
+ * - 照片「剛好符合螢幕、沒有放大」時：左右滑換張、往上滑、往下滑交給 GestureListener，
+ *   拖曳過程中照片會跟著手指走，放開沒過門檻就彈回。
+ * - 照片放大時：單指滑動一律是拖曳（看照片的其他部分），不會換張也不會觸發上下動作。
+ */
 public class ZoomImageView extends ImageView {
 
-    public interface SwipeListener { void onSwipe(int dir); }   // -1 上一張, 1 下一張
+    public interface GestureListener {
+        /** 1＝下一張、-1＝上一張。 */
+        void onPage(int dir);
+        void onSwipeUp();
+        void onSwipeDown();
+        /** 沒放大時拖曳中：axis 為 Swipe.AXIS_X／AXIS_Y，progress 0～1（1＝放開就會觸發）。 */
+        void onDragProgress(int axis, float dx, float dy, float progress);
+        /** 拖曳結束（不論有沒有觸發動作）。 */
+        void onDragEnd();
+    }
+
     public interface TapListener { void onSingleTap(); }
 
     private final Matrix matrix = new Matrix();
@@ -20,18 +39,28 @@ public class ZoomImageView extends ImageView {
     private GestureDetector gestureDet;
     private float baseScale = 1f;
     private float maxScale = 6f;
-    private SwipeListener swipeListener;
+    private GestureListener gestureListener;
     private TapListener tapListener;
-    private float downX;
-    private boolean swipeArmed;
+
+    private float downX, downY;
+    private boolean armed;
+    private int axis = Swipe.AXIS_NONE;
+    private VelocityTracker vt;
+    /** 換張／加入待刪的飛出動畫進行中：這段時間不接受新的滑動，避免動畫被打斷而漏掉動作。 */
+    private boolean flying;
+    private final float slop;
+    private final float flingV;
 
     public ZoomImageView(Context c) {
         super(c);
         setScaleType(ScaleType.MATRIX);
+        ViewConfiguration vc = ViewConfiguration.get(c);
+        slop = vc.getScaledTouchSlop() * 1.5f;
+        flingV = vc.getScaledMinimumFlingVelocity() * 6f;
         init(c);
     }
 
-    public void setSwipeListener(SwipeListener l) { swipeListener = l; }
+    public void setGestureListener(GestureListener l) { gestureListener = l; }
     public void setTapListener(TapListener l) { tapListener = l; }
 
     private void init(Context c) {
@@ -45,6 +74,10 @@ public class ZoomImageView extends ImageView {
                 clamp();
                 setImageMatrix(matrix);
                 return true;
+            }
+            @Override public void onScaleEnd(ScaleGestureDetector d) {
+                // 縮到比原本小時放開，彈回剛好符合螢幕，之後的滑動才會換張
+                if (currentScale() < baseScale) reset();
             }
         });
         gestureDet = new GestureDetector(c, new GestureDetector.SimpleOnGestureListener() {
@@ -63,7 +96,7 @@ public class ZoomImageView extends ImageView {
                 return true;
             }
             @Override public boolean onScroll(MotionEvent e1, MotionEvent e2, float dx, float dy) {
-                if (currentScale() > baseScale * 1.02f) {
+                if (!atFit()) {
                     matrix.postTranslate(-dx, -dy);
                     clamp();
                     setImageMatrix(matrix);
@@ -98,6 +131,11 @@ public class ZoomImageView extends ImageView {
         setImageMatrix(matrix);
     }
 
+    /** 照片是否剛好符合螢幕（沒有放大）。只有這時候滑動才會換張或觸發上下動作。 */
+    public boolean atFit() {
+        return currentScale() <= baseScale * 1.02f;
+    }
+
     private float currentScale() {
         matrix.getValues(vals);
         return vals[Matrix.MSCALE_X];
@@ -117,28 +155,114 @@ public class ZoomImageView extends ImageView {
         matrix.postTranslate(dx, dy);
     }
 
+    // ---------- 觸控 ----------
+
     @Override public boolean onTouchEvent(MotionEvent e) {
         scaleDet.onTouchEvent(e);
         gestureDet.onTouchEvent(e);
-        boolean atFit = currentScale() <= baseScale * 1.02f;
+        // 照片本身會跟著手指移動，所以用螢幕座標（raw）計算位移，不受 translation 影響
+        float rx = e.getRawX(), ry = e.getRawY();
         switch (e.getActionMasked()) {
             case MotionEvent.ACTION_DOWN:
-                downX = e.getX();
-                swipeArmed = atFit;
-                break;
-            case MotionEvent.ACTION_UP:
-                if (swipeArmed && atFit && swipeListener != null) {
-                    float d = e.getX() - downX;
-                    if (Math.abs(d) > getWidth() * 0.22f) {
-                        swipeListener.onSwipe(d < 0 ? 1 : -1);
-                    }
+                if (!flying) {
+                    animate().cancel();
+                    setTranslationX(0);
+                    setTranslationY(0);
+                    setAlpha(1f);
                 }
-                swipeArmed = false;
+                downX = rx;
+                downY = ry;
+                axis = Swipe.AXIS_NONE;
+                armed = !flying && atFit() && gestureListener != null;
+                if (vt != null) vt.recycle();
+                vt = VelocityTracker.obtain();
+                track(e);
                 break;
             case MotionEvent.ACTION_POINTER_DOWN:
-                swipeArmed = false;
+                // 第二根手指放下＝要縮放，取消滑動
+                if (armed) {
+                    armed = false;
+                    if (axis != Swipe.AXIS_NONE) springBack();
+                }
+                break;
+            case MotionEvent.ACTION_MOVE: {
+                if (!armed || scaleDet.isInProgress()) break;
+                track(e);
+                float dx = rx - downX, dy = ry - downY;
+                if (axis == Swipe.AXIS_NONE) axis = Swipe.lockAxis(dx, dy, slop);
+                if (axis == Swipe.AXIS_X) setTranslationX(dx);
+                else if (axis == Swipe.AXIS_Y) setTranslationY(dy);
+                if (axis != Swipe.AXIS_NONE) {
+                    gestureListener.onDragProgress(axis, dx, dy,
+                            Swipe.progress(axis, dx, dy, getWidth(), getHeight()));
+                }
+                break;
+            }
+            case MotionEvent.ACTION_UP: {
+                if (armed && axis != Swipe.AXIS_NONE) {
+                    track(e);
+                    vt.computeCurrentVelocity(1000);
+                    int r = Swipe.decide(axis, rx - downX, ry - downY,
+                            vt.getXVelocity(), vt.getYVelocity(), getWidth(), getHeight(), flingV);
+                    finishSwipe(r);
+                }
+                armed = false;
+                axis = Swipe.AXIS_NONE;
+                break;
+            }
+            case MotionEvent.ACTION_CANCEL:
+                if (armed && axis != Swipe.AXIS_NONE) {
+                    springBack();
+                    gestureListener.onDragEnd();
+                }
+                armed = false;
+                axis = Swipe.AXIS_NONE;
                 break;
         }
         return true;
+    }
+
+    private void track(MotionEvent e) {
+        if (vt == null) return;
+        MotionEvent ev = MotionEvent.obtain(e);
+        ev.setLocation(e.getRawX(), e.getRawY());
+        vt.addMovement(ev);
+        ev.recycle();
+    }
+
+    private void finishSwipe(int r) {
+        final GestureListener l = gestureListener;
+        l.onDragEnd();
+        if (r == Swipe.NEXT || r == Swipe.PREV) {
+            final int dir = r == Swipe.NEXT ? 1 : -1;
+            flying = true;
+            animate().translationX(-dir * getWidth()).alpha(0.2f).setDuration(140)
+                    .withEndAction(new Runnable() {
+                        @Override public void run() { flying = false; l.onPage(dir); fadeBackIn(); }
+                    }).start();
+        } else if (r == Swipe.UP) {
+            flying = true;
+            animate().translationY(-getHeight() * 0.9f).alpha(0f).setDuration(170)
+                    .withEndAction(new Runnable() {
+                        @Override public void run() { flying = false; l.onSwipeUp(); fadeBackIn(); }
+                    }).start();
+        } else if (r == Swipe.DOWN) {
+            springBack();
+            l.onSwipeDown();
+        } else {
+            springBack();
+        }
+    }
+
+    /** 換張或加入待刪之後，新照片在原位淡入。 */
+    private void fadeBackIn() {
+        setTranslationX(0);
+        setTranslationY(0);
+        setAlpha(0f);
+        animate().alpha(1f).setDuration(130).start();
+    }
+
+    private void springBack() {
+        animate().translationX(0).translationY(0).alpha(1f).setDuration(180).start();
     }
 }

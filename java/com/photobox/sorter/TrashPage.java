@@ -69,7 +69,7 @@ public class TrashPage extends Page {
         wrap.addView(grid, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
-        empty = Ui.tv(a, "待刪清單是空的\n\n到「整理」分頁把不要的照片滑進來，\n確認之後再一次送進系統垃圾桶。",
+        empty = Ui.tv(a, "待刪清單是空的\n\n在照片頁點開照片、往上滑就會加進來，\n確認之後再一次送進系統垃圾桶。",
                 15f, T.FAINT, false);
         empty.setGravity(Gravity.CENTER);
         empty.setLineSpacing(Ui.dp(a, 5), 1f);

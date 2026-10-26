@@ -137,8 +137,8 @@ public class BrowsePage extends Page {
         FrameLayout gridWrap = new FrameLayout(a);
         grid = new MediaGrid(a, Prefs.gridCols(a));
         grid.setEmptyText("沒有符合的照片");
-        grid.setHeaderAction("整理這段", new MediaGrid.HeaderAction() {
-            @Override public void onHeaderAction(int ym) { a.goSortWith(null, ym); }
+        grid.setHeaderAction("逐張整理", new MediaGrid.HeaderAction() {
+            @Override public void onHeaderAction(int ym) { reviewMonth(ym); }
         });
         grid.setListener(new MediaGrid.Listener() {
             @Override public void onOpen(Item it, ArrayList<Item> ctx) { ViewerActivity.open(a, it, ctx); }
@@ -636,6 +636,18 @@ public class BrowsePage extends Page {
                 })
                 .setNegativeButton("取消", null)
                 .show();
+    }
+
+    /** 月份標題的「逐張整理」：從那個月最新的一張打開單張檢視，範圍是目前照片牆上的全部（含篩選）。 */
+    private void reviewMonth(int ym) {
+        ArrayList<Item> items = grid.items();
+        for (int i = 0; i < items.size(); i++) {
+            if (items.get(i).ym == ym) {
+                a.reviewFrom(items.get(i), items, (ym / 100) + " 年 " + (ym % 100) + " 月起");
+                return;
+            }
+        }
+        Ui.toast(a, "這個月份沒有照片");
     }
 
     /** 從「更多 → 資料夾」跳過來時使用。 */

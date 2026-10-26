@@ -688,7 +688,7 @@
     {
       "name": "sort_start",
       "title": "開始滑動整理",
-      "description": "切到整理分頁，從某張或某天開始往舊／往新整理（會回 NEEDS_UI）",
+      "description": "打開單張檢視，從某張或某天開始逐張整理（往上滑待刪、往下滑編輯；v1.3.0 起沒有整理分頁）。include=unsorted 時只在未整理的照片之間切換（會回 NEEDS_UI）",
       "risk": "read",
       "params": {
         "type": "object",

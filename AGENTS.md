@@ -100,18 +100,18 @@ java/com/photobox/sorter/
 沒有 Fragment（不用 AndroidX），用自己的 `Page` 抽象：
 
 ```
-MainActivity              單一 Activity，底部五分頁（順序＝TAB_* 常數）＋左側 ☰ 選單（內容＝MorePage）
+MainActivity              單一 Activity，底部四分頁（照片／相簿／待刪／更多，順序＝TAB_* 常數）＋左側 ☰ 選單（內容＝MorePage）
 ├ BrowsePage              照片（預設）：日期格照片牆、搜尋、篩選、年月跳轉；長按多選＋左側相簿欄＋拖放；往右滑開相簿欄
 ├ AlbumsPage              相簿卡片牆、＋、建立／重新命名／複製／刪除
-├ SortPage                滑動整理：卡堆、手勢、復原、來源選單、「從某張開始」
 ├ TrashPage               待刪清單與系統垃圾桶
 └ MorePage                更多：資料夾、相似照片、備份與還原、設定（內嵌 SettingsPage）、說明
 
-ViewerActivity            單張檢視（縮放／影片播放）：資訊／喜好／加入相簿／分享／刪除；⋮ 保留、待刪、從這張開始整理
+ViewerActivity          ★ 單張檢視＝整理（v1.3.0 起）：沒放大時左右換張、上滑待刪（10 秒復原列）、下滑編輯；
+                          放大時滑動是拖曳。下方 資訊／喜好／加入相簿／編輯／分享／刪除；⋮ 保留、待刪、清除標記、編輯
+EditorActivity            照片編輯：畫筆、螢光筆、方框、圓框、箭頭、文字、復原／重做；另存新照片（不覆蓋原檔）
 InfoActivity              資訊（EXIF／影片 metadata）、位置、相簿、裝置 四分頁
 AlbumActivity             單一相簿：封面＋數量、照片牆、新增照片／分享相簿、多選動作
 PickerActivity            挑選要加入相簿的項目（pick mode 的 MediaGrid）
-StartPickActivity         挑「從哪一張開始整理」
 DupActivity               重複／相似照片掃描與分組
 
 MediaGrid        ★ 共用照片牆（ListView）：日期格、月份標題、多選、範圍選取、雙指改欄數、拖放起點、往右滑
@@ -119,7 +119,8 @@ Flow             ★ 照片牆排版運算（純 Java，JVM 測試）
 Albums           ★ 虛擬相簿：記憶體快取＋albums/album_items 表的唯一讀寫入口
 AlbumDialogs       命名、加入相簿、改名／複製／刪除對話框
 DragStack          多選照片疊成一疊拖曳（framework drag and drop＋收攏動畫）
-SortStartDialog    「從這張開始整理」：往舊／往新 × 只整理未整理／全部
+AnnotateView       編輯器畫布：圖形以原圖像素座標儲存、清單快照式復原／重做、render() 輸出
+Swipe              檢視器手勢判斷：鎖定方向、門檻、快速甩動（純 Java，JVM 測試）
 Share              ACTION_SEND(_MULTIPLE)＋ClipData＋讀取授權
 Backup             JSON 匯出／匯入（SAF），還原為合併
 BackupMatch        備份項目 ↔ 目前項目的比對（純 Java，JVM 測試）
@@ -127,13 +128,14 @@ Geo                影片 ISO 6709 位置字串解析（純 Java）
 Store            ★ 全 App 共用的照片清單與整理狀態（單例＋Listener），載入時一併載入相簿
 Db                 SQLite（版本 3）
 Media            ★ 所有 MediaStore 查詢與刪除／移動請求
-Item / Thumbs / Prefs / Card / ZoomImageView / Ui / Icons / T（色票）/ Page
+Item / Thumbs / Prefs / ZoomImageView / Ui / Icons / T（色票）/ Page
+（v1.3.0 移除的 SortPage／Card／SortStartDialog／StartPickActivity 在 git 歷史，tag v1.2.0 可找回）
 ```
 
 ### 名詞：「相簿」與「資料夾」刻意分開
 
 - **資料夾**＝MediaStore 的 BUCKET（實體位置）。程式沿用舊名：`Item.bucket`、`Store.albums()`、
-  `Store.Filter.album`、`MainActivity.moveToAlbum()`、`SortPage.setSource(album, ym)` **全都是資料夾**。
+  `Store.Filter.album`、`MainActivity.moveToAlbum()` **全都是資料夾**。
 - **相簿**＝`Albums` 管理的虛擬清單，不搬動檔案。
 - 介面文字一律用「資料夾」「相簿」區分；改程式別混用。
 
@@ -153,11 +155,12 @@ Store.get()                      // 單例
 .all / .byId / .state            // 全部項目（新到舊）、id 索引、整理狀態
 .load(ctx, done)                 // 背景載入（MediaStore 查詢＋狀態＋相簿）
 .setState / .setStates / .forget // 改狀態（寫 Db 並 notifyChanged）
-.undo() / .canUndo()             // 復原堆疊（最多 80 步）
+.undo() / .canUndo()             // 復原堆疊（最多 80 步；v1.3.0 起檢視器的上滑待刪自己記前一個狀態，不用這個）
 .filter(Filter)                  // 照片頁篩選與搜尋（含日期解析）
-.requestSortStart(id, newer, include) / .consumeSortStartRequest()
-                                 // 跨 Activity 傳「從這張開始整理」，由 MainActivity.onResume() 接手
 ```
+
+「從某張開始整理」在 v1.3.0 改成直接 `ViewerActivity.open(ctx, start, items)`：左右滑的範圍就是 items
+（照片牆目前的清單、某個資料夾），`MainActivity.reviewFrom()` 是共用入口。
 
 `Store.Filter`：`text`、`stateWanted`（-1 全部／0 未整理／1 已保留／2 待刪）、`onlyScreenshot`、`onlyVideo`、
 `onlyLarge`（>8MB）、`onlyLine`、`album`（＝資料夾）、`sort`（0 最新／1 最舊／2 最大）。
@@ -175,10 +178,12 @@ album_items(album_id, media_id, ts, PRIMARY KEY(album_id, media_id))
 相簿成員在照片被刪除時**不清掉**（丟進系統垃圾桶再還原時 id 不變，保留比較安全）；
 顯示、計數、匯出都只看 `Store.byId` 裡還存在的項目。
 
-### 手勢可自訂
+### 檢視器手勢（v1.3.0 起固定，不可自訂）
 
-`Prefs.LEFT/RIGHT/UP/DOWN` → `ACT_TRASH / ACT_KEEP / ACT_MOVE / ACT_SKIP / ACT_NONE`。
-顏色與圖示由 `Prefs.color(action)`／`Prefs.icon(action)` 決定，新增動作要同時補這兩個 switch。
+`ZoomImageView` 只在 `atFit()`（縮放 ≤ 原始的 1.02 倍）時把單指滑動交給 `GestureListener`：
+先用 `Swipe.lockAxis()` 鎖定橫向或直向，拖曳時照片跟著手指走，放開時 `Swipe.decide()` 決定
+`NEXT／PREV／UP／DOWN／NONE`。放大時單指滑動走 `GestureDetector.onScroll` 拖曳。
+第二根手指放下（縮放）會取消滑動；飛出動畫進行中（`flying`）不接受新滑動。
 
 ## 5. 關鍵設計決策（含原因與放棄的方案）
 
@@ -196,7 +201,7 @@ album_items(album_id, media_id, ts, PRIMARY KEY(album_id, media_id))
 | D10 | 格子寬度用權重平分＋正方形格子；圖示字級依實際格子大小等比例縮放 | 倬截圖回報：相簿欄出現時最右一欄被截斷、6 欄時日期字被切掉、勾選圓圈太大 | 預先算好像素寬度、固定 dp 尺寸 |
 | D11 | 往右滑＝打開相簿整理（空選取、sticky）；往左滑只在**沒有選取**時收起 | 倬要求往右滑進入；避免誤滑把選好的照片取消 | 往左滑一律取消 |
 | D12 | 拖曳到相簿時只改外框與底色，不放大卡片 | 放大會超出相簿欄被裁切（倬回報） | 放大 1.06 倍 |
-| D13 | 「從某張開始整理」一次選完方向與範圍（4 選項），整理頁上方有直接按鈕 | 倬要求往新、往舊都能整理，且原本要點來源選單到最下面太慢 | 只能往舊、依該張狀態自動決定範圍（畫面看不出來，容易混淆） |
+| D13 | ~~「從某張開始整理」對話框~~ v1.3.0 起改成：在照片頁點開哪一張就從哪一張開始，左滑往舊、右滑往新；只看未整理用照片頁篩選 | 整理頁已併入單張檢視（D21） | 保留 4 選項對話框（檢視器裡已經能直接左右滑，多一層選單反而慢） |
 | D14 | v1.2.0 起改用共用簽章 `hoonsor-release.jks`＋GitHub Actions 發布 | 免接線更新與 Agent API 都需要共用簽章；2026-10-18 倬決定換（一次性：備份 → 卸載 → 安裝 → 匯入）。2026-10-13 原決定暫不換已取消 | 繼續用自帶的 `keystore.p12`（CI 拿不到、無法和其他 APP 互通） |
 | D15 | 簽章金鑰與密碼一律由環境變數提供（`SIGNING_*`；舊金鑰 `PB_KS_PASS`）；找不到金鑰時停止 | repo 是公開的，不能放密碼（2026-10-13 倬決定）；自動產生新金鑰曾造成 v1.0.6→v1.1.0 必須卸載 | 密碼寫死在 build.sh |
 | D16 | 程式碼放在英文路徑 `D:\dev\APK-Photo`，中文資料夾只留筆記與舊快照 | 方便建置與安裝手機測試，並與其他 APK 專案的標準骨架一致（2026-10-18 確認已搬家；原 2026-10-13 決定暫不搬已取消） | 繼續在中文路徑 `30-手機照片APP` 開發 |
@@ -204,6 +209,9 @@ album_items(album_id, media_id, ts, PRIMARY KEY(album_id, media_id))
 | D18 | 單張檢視下方按鈕改為 資訊／喜好／加入相簿／分享／刪除，保留／待刪移到 ⋮ | 對齊參考 App 的四顆按鈕；原本五個整理動作放不下 | — |
 | D19 | 刪除在檢視器可選「加入待刪」或「立即移到系統垃圾桶」 | 兩種習慣都保留；仍一律走系統確認 | — |
 | D20 | LINE 篩選依 RELATIVE_PATH 或資料夾名為「LINE」 | LINE 存檔路徑是 Pictures/LINE、Movies/LINE | 依檔名判斷（不可靠） |
+| D21 | v1.3.0 移除「整理」分頁，整理併進單張檢視：沒放大時上滑＝加入待刪（自動下一張、10 秒復原列）、下滑＝編輯；放大時滑動一律是拖曳 | 2026-10-26 倬要求：在照片頁看照片時就能整理，不必切分頁；待刪分頁保留，才知道去哪裡丟垃圾桶／永久清除 | 保留整理分頁並存（兩套手勢容易混淆）；手勢可自訂（左右已固定給換張，只剩上下兩個方向，固定比較不會誤觸） |
+| D22 | 編輯器一律「另存新照片」：同資料夾、檔名加「_編輯_時間」、DATE_TAKEN 沿用原照片 | 覆蓋原檔要系統逐張確認，且改壞救不回來；沿用拍攝時間讓新照片排在原照片旁邊 | 覆蓋原檔；存到固定的「照片整理箱」資料夾（只在原資料夾不能寫入時才用） |
+| D23 | 編輯器載入時最長邊上限 4096 px，用 ImageDecoder（自動套 EXIF 方向） | 4096×3072 ARGB 約 50MB，存檔還要複製一份，再大容易 OOM | 原尺寸載入；分塊（tile）編輯：複雜度太高 |
 
 **待倬決定（2026-10-10 討論過，尚未回覆）**
 - 定期自動備份到雲端硬碟／Dropbox：建議做法是「SAF 取得長期寫入授權＋JobScheduler 定期覆寫同一檔案」，由雲端 App 負責上傳，本 App 仍不需網路權限。頻率未定。
@@ -226,7 +234,7 @@ album_items(album_id, media_id, ts, PRIMARY KEY(album_id, media_id))
 - 新增任何權限，尤其是網路權限
 - 更換簽章金鑰、套件名，或任何會逼倬卸載重裝的變更
 - 會丟資料的 DB 結構變更
-- 拿掉既有功能、改變手勢預設或長按語意
+- 拿掉既有功能、改變檢視器手勢（D21）或長按語意
 - 改建置方式（例如導入 Gradle；GitHub Actions 已於 v1.2.0 導入）
 
 **Never**
@@ -256,7 +264,7 @@ album_items(album_id, media_id, ts, PRIMARY KEY(album_id, media_id))
     不要開快速捲動軸、不要在格子掛 listener、不要用固定像素或固定 dp（三者都被倬實機回報過）。
 13. **長按有三種意思**：未多選→進入多選；多選中長按已選→`DragStack` 拖放（只有照片頁有相簿欄時）；多選中長按未選→範圍選取。
     拖放放開後用 `post` 再改畫面，不要在 `ACTION_DROP` 當下重建側欄；拖到相簿上不要放大卡片。
-    點日期格＝整天全選／全取消（`setDateSelectEnabled(false)` 可關閉，StartPickActivity 有關）。
+    點日期格＝整天全選／全取消（`setDateSelectEnabled(false)` 可關閉）。
 14. **簽章金鑰遺失會逼使用者卸載**：v1.0.6 的金鑰在已回收的容器裡遺失，v1.1.0 起換了新金鑰，倬必須卸載重裝、整理進度歸零。
     舊的 `keystore.p12` 仍要保留（替還沒換裝的手機建置）；v1.2.0 起正式版用共用金鑰。Android 12+ 不同簽章的 APP 宣告同名權限會安裝失敗（日後 Agent API 用 signature 權限時要注意）。
 15. **Agent API 的 signature 權限**：標準 Agent API 用 `protectionLevel="signature"`，大腦 APP 用共用金鑰簽，
@@ -268,7 +276,7 @@ album_items(album_id, media_id, ts, PRIMARY KEY(album_id, media_id))
 - **不接受廉價 MVP 感**：按鈕要有邊框或對比、手繪向量圖示（`Icons.java`）、間距一致
 - 功能要完整：CRUD 齊全、多選動作要和單張檢視一致
 - 資訊密度高：雙指縮放改每列數量；長按多選；多選後長按已選項拖到相簿
-- 常用操作減步驟（例如「從某張開始」直接放在整理頁上方）
+- 常用操作減步驟（例如整理直接在單張檢視上下滑，不必切到另一個分頁）
 - 參考常用 App 的操作方式，但不照抄外觀
 - 刪除可復原、危險操作走系統確認
 - SemVer `vX.Y.Z`，versionCode 由版號推導

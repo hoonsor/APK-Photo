@@ -8,7 +8,7 @@
 
 | 項目 | 內容 |
 |---|---|
-| 版本 | **v1.3.0**（versionCode 10300），2026-10-26（尚未推 tag，main 的 `latest` 測試版就是這版） |
+| 版本 | **v1.3.0**（versionCode 10300），2026-10-27 發布正式版 |
 | 套件 | `com.photobox.sorter`（LAB：`com.photobox.sorter.lab`） |
 | 支援 | Android 11（API 30）以上，targetSdk 34 |
 | 建置 | aapt2＋ecj／javac＋d8＋apksigner（純 Android Framework，無 AndroidX，不用 Gradle），見 `AGENTS.md` 第 3 節；GitHub Actions 自動發布 |
@@ -109,7 +109,7 @@ commit 欄：2026-10-13 之前沒有 git，標「—」。
 
 1. **等倬決定**：自動備份頻率；AI 判斷待刪的做法（a 正式版加網路權限／b 另出 AI 版／c 離線模糊偵測）與 AI 建議放哪裡。
 2. ~~推 `v1.2.0` tag 發布~~（2026-10-18 已發布；2026-10-25 確認 Release APK 的簽章 SHA-256 `514ec00e…` 與語音總控 v0.3.0 相同，是共用金鑰）。倬在手機上換裝（先在 App 內匯出備份 → 卸載 → 安裝 v1.2.0 → 匯入），並實測一次 App 內更新。
-3. 倬實機驗證 v1.3.0（上方「待實機驗證」的 v1.3.0 項目），確認後推 `v1.3.0` tag 發布正式版。
+3. ~~推 `v1.3.0` tag 發布正式版~~（2026-10-27 倬實機測過三輪回饋後同意發布）。最後一版的相簿欄跟手拖曳若手感要調，改 `BrowsePage.sideDragEnd()` 的門檻與 `settleSide()` 的時間。
    （語音總控說明書的 `sort_start` 一節已在 2026-10-26 改成「打開照片檢視逐張整理」，合進 APK-VoiceHub main，commit 2e32b9b。）
 4. 實作 Agent API：先做 read 類（`photo_list`、`album_list`、`stats_get`），再做 reversible 類。
 5. 備份補齊標準四件套（zip、分享、存檔、匯入前自動備份）與健康檢查頁。
@@ -120,6 +120,7 @@ commit 欄：2026-10-13 之前沒有 git，標「—」。
 
 | 日期 | 電腦 | 完成 | 決定＋原因 | 放棄＋原因 | 未完成 | 下一步 | 環境注意事項 |
 |---|---|---|---|---|---|---|---|
+| 2026-10-27 | A（家裡） | 發布 v1.3.0 正式版（含三輪回饋：待刪照片不在左右滑範圍、⋮ 拿掉保留、編輯器捲動工具列＋粗細滑桿＋馬賽克、相簿欄跟手拖曳） | 倬實機測過後同意發布 | — | 相簿欄跟手拖曳（45c224f）是否已實機測過，待倬確認 | 見上方「下一步」 | 無 |
 | 2026-10-26 | A（家裡） | v1.3.0：整理分頁併入單張檢視（上滑待刪＋10 秒復原、下滑編輯、放大時拖曳）、照片編輯器、手勢說明改成固定、資料夾長按與月份標題改為逐張整理 | 倬要求合併；待刪分頁保留（倬：不然不知道去哪裡丟垃圾桶）；編輯另存新照片不覆蓋（D22）；手勢改固定（D21） | 保留整理分頁、手勢可自訂、覆蓋原檔 | 實機驗證、推 v1.3.0 tag、語音總控說明書 sort_start 一節 | 見上方「下一步」第 3 項 | 刪掉的 SortPage／Card／SortStartDialog／StartPickActivity 移到 `_trash/20261026/`（已加入 .gitignore，只在 A 電腦），也可從 tag v1.2.0 找回 |
 | 2026-10-25 | A（家裡） | 確認共用簽章已完成：CI 成功、4 個 SIGNING_* Secrets 都在、v1.2.0 Release 的簽章與其他 APP（語音總控 v0.3.0）相同 | 不重做，只核對 | — | 手機換裝與實測 App 內更新 | 見上方「下一步」第 2 項 | 無 |
 | 2026-10-18 | A（家裡） | v1.2.0：共用簽章、GitHub Actions、App 內更新（Java 版，移植自鬧鐘 APP） | 倬決定：換共用金鑰（一次性重裝）、加 INTERNET 只用於更新；build.sh 支援 Android SDK 工具鏈（build-tools 36.0.0） | 只開瀏覽器到 Releases（倬選完整 App 內更新）；build-tools 34.0.0（d8 NPE） | 推 tag、手機換裝與實測更新 | 見上方「下一步」 | 本機建置：`ANDROID_HOME` 指向 Android SDK、JDK 用 `C:/Users/hoonsor/.jdks/jbr-21.0.11` |

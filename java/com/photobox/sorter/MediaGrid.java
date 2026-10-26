@@ -197,6 +197,24 @@ public class MediaGrid extends FrameLayout {
     private SwipeListener swipeListener;
     public void setSwipeListener(SwipeListener l) { swipeListener = l; }
 
+    /**
+     * 跟著手指的水平拖曳（照片頁拉出相簿欄用）。設定之後就不再走 SwipeListener 的「放開才判斷」。
+     * onHDragStart 回傳 false 表示這次不接手（例如已經打開還往右拉），事件照常交給清單捲動。
+     * dx 是從按下到現在的水平位移（螢幕座標，不受照片牆本身位移影響）；vx 是放開時的速度（px/s）。
+     */
+    public interface HDragListener {
+        boolean onHDragStart(int dir);
+        void onHDrag(float dx);
+        void onHDragEnd(float dx, float vx);
+    }
+    private HDragListener hDragListener;
+    public void setHDragListener(HDragListener l) { hDragListener = l; }
+
+    private float hDownX, hDownY;
+    /** 0＝還沒判斷、1＝水平拖曳中（已接手）、2＝不是水平拖曳（交給清單） */
+    private int hState = 0;
+    private android.view.VelocityTracker hVt;
+
     public void enterSelect(Item first) {
         sticky = first == null;
         if (listener != null && !listener.onEnterSelect()) return;
@@ -569,7 +587,7 @@ public class MediaGrid extends FrameLayout {
     private void setupGestures(Context c) {
         gestures = new GestureDetector(c, new GestureDetector.SimpleOnGestureListener() {
             @Override public boolean onFling(MotionEvent e1, MotionEvent e2, float vx, float vy) {
-                if (swipeListener == null || e1 == null || multiTouch) return false;
+                if (swipeListener == null || hDragListener != null || e1 == null || multiTouch) return false;
                 float dx = e2.getX() - e1.getX(), dy = e2.getY() - e1.getY();
                 // 明顯的水平滑動才算，避免和上下捲動混淆
                 if (Math.abs(dx) < Ui.dp(getContext(), 80) || Math.abs(dx) < Math.abs(dy) * 1.8f) return false;
@@ -625,7 +643,62 @@ public class MediaGrid extends FrameLayout {
         });
     }
 
+    /** 水平拖曳：判斷、接手、回報。回傳 true 表示這個事件已被拖曳用掉。 */
+    private boolean handleHDrag(MotionEvent ev) {
+        if (hDragListener == null) return false;
+        int action = ev.getActionMasked();
+        float rx = ev.getRawX(), ry = ev.getRawY();
+        if (action == MotionEvent.ACTION_DOWN) {
+            hDownX = rx;
+            hDownY = ry;
+            hState = 0;
+            if (hVt != null) hVt.recycle();
+            hVt = android.view.VelocityTracker.obtain();
+        }
+        if (hVt != null) {
+            MotionEvent m = MotionEvent.obtain(ev);
+            m.setLocation(rx, ry);
+            hVt.addMovement(m);
+            m.recycle();
+        }
+        if (action == MotionEvent.ACTION_POINTER_DOWN && hState != 1) { hState = 2; return false; }
+        float dx = rx - hDownX, dy = ry - hDownY;
+        if (hState == 0 && action == MotionEvent.ACTION_MOVE && !multiTouch) {
+            float slop = android.view.ViewConfiguration.get(getContext()).getScaledTouchSlop();
+            if (Math.abs(dy) > slop && Math.abs(dy) >= Math.abs(dx)) hState = 2;       // 上下捲動
+            else if (Math.abs(dx) > slop * 1.5f && Math.abs(dx) > Math.abs(dy) * 1.5f) {
+                if (hDragListener.onHDragStart(dx > 0 ? 1 : -1)) {
+                    hState = 1;
+                    // 接手：取消清單的捲動、長按與點擊
+                    MotionEvent cancel = MotionEvent.obtain(ev);
+                    cancel.setAction(MotionEvent.ACTION_CANCEL);
+                    gestures.onTouchEvent(cancel);
+                    super.dispatchTouchEvent(cancel);
+                    cancel.recycle();
+                    hDownX = rx;   // 從接手的位置開始算，畫面才不會一下子跳一段
+                    dx = 0;
+                } else {
+                    hState = 2;
+                }
+            }
+        }
+        if (hState != 1) return false;
+        if (action == MotionEvent.ACTION_MOVE) {
+            hDragListener.onHDrag(dx);
+        } else if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+            float vx = 0;
+            if (hVt != null && action == MotionEvent.ACTION_UP) {
+                hVt.computeCurrentVelocity(1000);
+                vx = hVt.getXVelocity();
+            }
+            hState = 0;
+            hDragListener.onHDragEnd(dx, vx);
+        }
+        return true;
+    }
+
     @Override public boolean dispatchTouchEvent(MotionEvent ev) {
+        if (handleHDrag(ev)) return true;
         int action = ev.getActionMasked();
         if (action == MotionEvent.ACTION_DOWN) {
             multiTouch = false;

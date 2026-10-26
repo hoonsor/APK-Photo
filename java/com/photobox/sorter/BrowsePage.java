@@ -41,7 +41,6 @@ public class BrowsePage extends Page {
     private View chipScroll, yearScroll, monthScroll;
     private ScrollView sidebar;
     private FrameLayout gridWrap;
-    private boolean sidebarShown = false;
     private TextView summary, floatLabel, selCount;
 
     public BrowsePage(MainActivity a) { super(a); }
@@ -110,9 +109,9 @@ public class BrowsePage extends Page {
         summary.setPadding(Ui.dp(a, 14), Ui.dp(a, 4), Ui.dp(a, 14), Ui.dp(a, 6));
         root.addView(summary, Ui.lpW());
 
-        // ---- 主體：左側相簿欄（多選時）＋照片牆 ----
-        LinearLayout body = Ui.rowH(a);
-        body.setGravity(Gravity.TOP);
+        // ---- 主體：照片牆＋疊在上面的左側相簿欄（多選時） ----
+        // 相簿欄是疊層而不是並排：拖曳時只要位移，照片牆不必每格重新排版（見 animateSidebar）
+        FrameLayout body = new FrameLayout(a);
 
         sidebar = new ScrollView(a);
         sidebar.setBackgroundColor(T.SURFACE);
@@ -132,7 +131,6 @@ public class BrowsePage extends Page {
             }
         });
         sidebarWidth = Math.max(Ui.dp(a, 108), a.getResources().getDisplayMetrics().widthPixels * 30 / 100);
-        body.addView(sidebar, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT));
         // 內容固定為完整寬度，相簿欄寬度動畫時內容是「被推進來」而不是被壓扁
         sidebarList.setLayoutParams(new FrameLayout.LayoutParams(sidebarWidth, ViewGroup.LayoutParams.WRAP_CONTENT));
 
@@ -148,19 +146,11 @@ public class BrowsePage extends Page {
             @Override public boolean onEnterSelect() { showSelectUi(true); return true; }
             @Override public void onExitSelect() { showSelectUi(false); }
         });
-        grid.setSwipeListener(new MediaGrid.SwipeListener() {
-            @Override public void onSwipe(int dir) {
-                if (dir > 0 && !grid.inSelect()) {
-                    grid.enterSelect(null);   // 往右滑：打開相簿整理（左側相簿欄滑進來）
-                    if (!swipeHintShown) {
-                        swipeHintShown = true;
-                        Ui.toast(a, "點選照片後點左側相簿，或長按已選的照片拖過去；往左滑可收起");
-                    }
-                } else if (dir < 0 && grid.inSelect()) {
-                    if (grid.selectedCount() == 0) grid.exitSelect();
-                    else Ui.toast(a, "還有 " + grid.selectedCount() + " 個已選取的項目，按左上 ✕ 才會取消");
-                }
-            }
+        // 往右拉：相簿欄跟著手指從左邊出來；往左拉：收起（有選取時不收，避免手滑取消）
+        grid.setHDragListener(new MediaGrid.HDragListener() {
+            @Override public boolean onHDragStart(int dir) { return sideDragStart(dir); }
+            @Override public void onHDrag(float dx) { sideDragMove(dx); }
+            @Override public void onHDragEnd(float dx, float vx) { sideDragEnd(vx); }
         });
         grid.setDragStarter(new MediaGrid.DragStarter() {
             @Override public boolean onStartDrag(View source, ArrayList<Item> sel) {
@@ -190,7 +180,10 @@ public class BrowsePage extends Page {
         flp.topMargin = Ui.dp(a, 8);
         flp.rightMargin = Ui.dp(a, 22);
         gridWrap.addView(floatLabel, flp);
-        body.addView(gridWrap, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f));
+        body.addView(gridWrap, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        body.addView(sidebar, new FrameLayout.LayoutParams(sidebarWidth, ViewGroup.LayoutParams.MATCH_PARENT));
+        sidebar.setTranslationX(-sidebarWidth);
 
         LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0);
@@ -338,50 +331,138 @@ public class BrowsePage extends Page {
         summary.setVisibility(on ? View.GONE : View.VISIBLE);
         selBar.setVisibility(on ? View.VISIBLE : View.GONE);
         a.setNavVisible(!on);
-        if (on) rebuildSidebar();
+        if (on && !sidebarShown) rebuildSidebar();
         animateSidebar(on);
         updateSelBar();
     }
 
-    /**
-     * 相簿欄從左側滑進來，照片牆同步被推到右邊；收起時反向。
-     *
-     * 只在開始（展開）或結束（收起）時排版一次，中間全部用 translationX 位移，交給 GPU 搬動已經畫好的畫面。
-     * v1.3.0 以前是每一格畫面都改相簿欄寬度，照片牆每格都要整個重排（格子大小、日期字級、縮圖重新縮放），
-     * 手機做不完就掉格，倬回報「動畫有點卡」。
-     */
-    private void animateSidebar(final boolean show) {
-        final int full = sidebarWidth;
-        final LinearLayout.LayoutParams lp = (LinearLayout.LayoutParams) sidebar.getLayoutParams();
-        android.view.animation.Interpolator ip = new android.view.animation.DecelerateInterpolator(1.8f);
-        sidebar.animate().cancel();
-        gridWrap.animate().cancel();
-        if (show) {
-            float start = sidebarShown ? sidebar.getTranslationX() : -full;
-            sidebarShown = true;
-            if (lp.width != full) { lp.width = full; sidebar.setLayoutParams(lp); }   // 唯一一次排版
-            sidebar.setVisibility(View.VISIBLE);
+    // ---------- 相簿欄：跟著手指拉出／收起 ----------
+    //
+    // 參考倬常用的相簿 App：拖曳中照片牆維持全寬（格子大小不變），整片跟著手指往右推，相簿欄從左邊跟進來；
+    // 放開後依距離或甩動速度決定打開或收回，再用動畫補完。照片牆只在「完全打開」（變窄）
+    // 和「開始收起」（恢復全寬）各排版一次，中間全部是 translationX，交給 GPU 搬動。
+    // v1.3.0 以前是每格畫面改相簿欄寬度，照片牆每格都整個重排，手機做不完而掉格。
+
+    /** 目標狀態：true＝打開（或正在打開）。 */
+    private boolean sidebarShown = false;
+    /** 目前拉出的距離：0＝收起、sidebarWidth＝完全打開（只在拖曳與動畫中有意義）。 */
+    private float sideOffset = 0;
+    private float sideDragBase = 0;
+    private boolean sideDragging = false;
+    private android.animation.ValueAnimator sideAnim;
+
+    private FrameLayout.LayoutParams gridLp() { return (FrameLayout.LayoutParams) gridWrap.getLayoutParams(); }
+
+    /** 拖曳／動畫用的版面：照片牆全寬，相簿欄顯示（位置由 setSideOffset 決定）。 */
+    private void enterSlideLayout() {
+        FrameLayout.LayoutParams lp = gridLp();
+        if (lp.leftMargin != 0) { lp.leftMargin = 0; gridWrap.setLayoutParams(lp); }   // 一次排版：恢復全寬
+        sidebar.setVisibility(View.VISIBLE);
+    }
+
+    private void setSideOffset(float d) {
+        sideOffset = Math.max(0, Math.min(sidebarWidth, d));
+        gridWrap.setTranslationX(sideOffset);
+        sidebar.setTranslationX(sideOffset - sidebarWidth);
+    }
+
+    private void applySideLayout(boolean open) {
+        FrameLayout.LayoutParams lp = gridLp();
+        int m = open ? sidebarWidth : 0;
+        if (lp.leftMargin != m) { lp.leftMargin = m; gridWrap.setLayoutParams(lp); }   // 一次排版
+        gridWrap.setTranslationX(0);
+        sidebar.setTranslationX(open ? 0 : -sidebarWidth);
+        sidebar.setVisibility(open ? View.VISIBLE : View.GONE);
+        sideOffset = open ? sidebarWidth : 0;
+    }
+
+    private boolean sideAnimating() { return sideAnim != null && sideAnim.isRunning(); }
+
+    private boolean sideDragStart(int dir) {
+        if (sideAnimating()) return false;
+        if (dir > 0 && !sidebarShown) {
+            rebuildSidebar();
             sidebar.scrollTo(0, 0);
-            sidebar.setTranslationX(start);
-            gridWrap.setTranslationX(start);
-            sidebar.animate().translationX(0).setDuration(240).setInterpolator(ip).start();
-            gridWrap.animate().translationX(0).setDuration(240).setInterpolator(ip).start();
+            enterSlideLayout();
+            setSideOffset(0);
+            sideDragBase = 0;
+        } else if (dir < 0 && sidebarShown) {
+            if (grid.selectedCount() > 0) {
+                Ui.toast(a, "還有 " + grid.selectedCount() + " 個已選取的項目，按左上 ✕ 才會取消");
+                return false;
+            }
+            enterSlideLayout();
+            setSideOffset(sidebarWidth);
+            sideDragBase = sidebarWidth;
         } else {
-            if (!sidebarShown) return;
-            sidebarShown = false;
-            sidebar.animate().translationX(-full).setDuration(220).setInterpolator(ip).start();
-            gridWrap.animate().translationX(-full).setDuration(220).setInterpolator(ip)
-                    .withEndAction(new Runnable() {
-                        @Override public void run() {
-                            if (sidebarShown) return;   // 動畫途中又被打開
-                            sidebar.setVisibility(View.GONE);
-                            lp.width = 0;
-                            sidebar.setLayoutParams(lp);   // 唯一一次排版：照片牆恢復全寬
-                            sidebar.setTranslationX(0);
-                            gridWrap.setTranslationX(0);
-                        }
-                    }).start();
+            return false;
         }
+        sideDragging = true;
+        return true;
+    }
+
+    private void sideDragMove(float dx) {
+        if (sideDragging) setSideOffset(sideDragBase + dx);
+    }
+
+    private void sideDragEnd(float vx) {
+        if (!sideDragging) return;
+        sideDragging = false;
+        float fling = Ui.dp(a, 350);
+        boolean open = vx > fling || (vx >= -fling && sideOffset > sidebarWidth / 2f);
+        settleSide(open, vx);
+    }
+
+    /** 從目前位置用動畫補完到打開或收起；結束時排版一次並切換多選介面。 */
+    private void settleSide(final boolean open, float vx) {
+        if (sideAnim != null) sideAnim.cancel();
+        sidebarShown = open;
+        float target = open ? sidebarWidth : 0;
+        float dist = Math.abs(target - sideOffset);
+        long dur = (long) (240 * dist / Math.max(1, sidebarWidth));
+        // 甩得快就收得快：照手指的速度走完剩下的距離（乘 1.5 讓減速看起來自然）
+        if (Math.abs(vx) > 1) dur = Math.min(dur, (long) (dist / Math.abs(vx) * 1000 * 1.5f));
+        dur = Math.max(90, Math.min(260, dur));
+        sideAnim = android.animation.ValueAnimator.ofFloat(sideOffset, target);
+        sideAnim.setDuration(dur);
+        sideAnim.setInterpolator(new android.view.animation.DecelerateInterpolator(1.6f));
+        sideAnim.addUpdateListener(new android.animation.ValueAnimator.AnimatorUpdateListener() {
+            @Override public void onAnimationUpdate(android.animation.ValueAnimator va) {
+                setSideOffset((Float) va.getAnimatedValue());
+            }
+        });
+        sideAnim.addListener(new android.animation.AnimatorListenerAdapter() {
+            boolean cancelled = false;
+            @Override public void onAnimationCancel(android.animation.Animator an) { cancelled = true; }
+            @Override public void onAnimationEnd(android.animation.Animator an) {
+                if (cancelled) return;
+                applySideLayout(open);
+                if (open && !grid.inSelect()) {
+                    grid.enterSelect(null);   // 拉出相簿欄＝進入相簿整理（空選取）
+                    if (!swipeHintShown) {
+                        swipeHintShown = true;
+                        Ui.toast(a, "點選照片後點左側相簿，或長按已選的照片拖過去；往左拉可收起");
+                    }
+                } else if (!open && grid.inSelect() && grid.selectedCount() == 0) {
+                    grid.exitSelect();
+                }
+            }
+        });
+        sideAnim.start();
+    }
+
+    /** 非拖曳的開關（長按進入多選、按 ✕ 離開）：用同一套動畫。 */
+    private void animateSidebar(final boolean show) {
+        if (sideDragging || show == sidebarShown) return;
+        if (show) {
+            sidebar.scrollTo(0, 0);
+            enterSlideLayout();
+            setSideOffset(0);
+        } else {
+            enterSlideLayout();
+            setSideOffset(sideOffset > 0 ? sideOffset : sidebarWidth);
+        }
+        settleSide(show, 0);
     }
 
     private void updateSelBar() {

@@ -486,7 +486,8 @@ public class ViewerActivity extends Activity implements Store.Listener {
         pm.getMenu().add(0, 2, 1, "加入待刪清單");
         pm.getMenu().add(0, 3, 2, "清除標記");
         if (!cur().video) pm.getMenu().add(0, 4, 3, "編輯照片（文字、螢光筆、框線、箭頭）");
-        if (cur().video) pm.getMenu().add(0, 5, 4, "用其他 App 播放");
+        if (!cur().video) pm.getMenu().add(0, 6, 4, "送到資料包");
+        if (cur().video) pm.getMenu().add(0, 5, 5, "用其他 App 播放");
         pm.setOnMenuItemClickListener(new PopupMenu.OnMenuItemClickListener() {
             @Override public boolean onMenuItemClick(MenuItem m) {
                 switch (m.getItemId()) {
@@ -494,11 +495,18 @@ public class ViewerActivity extends Activity implements Store.Listener {
                     case 3: mark(Db.STATE_NONE); break;
                     case 4: openEditor(); break;
                     case 5: openExternally(cur()); break;
+                    case 6: sendToDataPack(); break;
                 }
                 return true;
             }
         });
         pm.show();
+    }
+
+    private void sendToDataPack() {
+        java.util.ArrayList<Item> one = new java.util.ArrayList<Item>();
+        one.add(cur());
+        Share.toDataPack(this, one);
     }
 
     // ---------- 往上滑：加入待刪（可復原） ----------

@@ -262,6 +262,15 @@ public class BrowsePage extends Page {
         });
         l.addView(all);
 
+        TextView pack = miniChip("資料包", T.PRIMARY);
+        pack.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { Share.toDataPack(a, grid.selectedItems()); }
+        });
+        LinearLayout.LayoutParams plp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        plp.leftMargin = Ui.dp(a, 6);
+        l.addView(pack, plp);
+
         TextView share = Ui.sharePill(a);
         share.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) { Share.items(a, grid.selectedItems()); }

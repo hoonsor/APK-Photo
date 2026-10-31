@@ -21,35 +21,68 @@ public final class Share {
     public static void items(Activity a, List<Item> items) {
         if (items == null || items.isEmpty()) { Ui.toast(a, "還沒選取任何項目"); return; }
         try {
-            Intent i;
-            if (items.size() == 1) {
-                Item it = items.get(0);
-                i = new Intent(Intent.ACTION_SEND);
-                i.setType(mimeOf(it));
-                i.putExtra(Intent.EXTRA_STREAM, it.uri());
-                i.setClipData(ClipData.newRawUri("", it.uri()));
-            } else {
-                ArrayList<Uri> uris = new ArrayList<Uri>(items.size());
-                boolean anyVideo = false, anyImage = false;
-                for (int k = 0; k < items.size(); k++) {
-                    uris.add(items.get(k).uri());
-                    if (items.get(k).video) anyVideo = true; else anyImage = true;
-                }
-                i = new Intent(Intent.ACTION_SEND_MULTIPLE);
-                // 混合時用 */*：image/* 會讓部分 App 把影片當成圖片處理
-                i.setType(anyVideo && anyImage ? "*/*" : (anyVideo ? "video/*" : "image/*"));
-                i.putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris);
-                ClipData clip = ClipData.newRawUri("", uris.get(0));
-                for (int k = 1; k < uris.size(); k++) clip.addItem(new ClipData.Item(uris.get(k)));
-                i.setClipData(clip);
-            }
-            i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-            Intent chooser = Intent.createChooser(i, "分享 " + items.size() + " 個項目");
+            Intent chooser = Intent.createChooser(build(items), "分享 " + items.size() + " 個項目");
             chooser.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
             a.startActivity(chooser);
         } catch (Throwable t) {
             Ui.toast(a, "無法開啟分享選單：" + t.getClass().getSimpleName());
         }
+    }
+
+    /**
+     * 直接送到「賈維斯資料包」。本 App 不連網，只把讀取授權交給對方；OCR 與上傳都由資料包負責。
+     * 影片不支援，只送照片。LAB 版優先送 LAB 版資料包，兩版資料才不會混在一起。
+     */
+    public static void toDataPack(Activity a, List<Item> items) {
+        ArrayList<Item> photos = new ArrayList<Item>();
+        if (items != null) for (int k = 0; k < items.size(); k++) if (!items.get(k).video) photos.add(items.get(k));
+        if (photos.isEmpty()) { Ui.toast(a, "資料包只收照片"); return; }
+        String target = dataPackPackage(a);
+        if (target == null) { Ui.toast(a, "還沒安裝賈維斯資料包"); return; }
+        try {
+            Intent i = build(photos);
+            i.setPackage(target);
+            a.startActivity(i);
+        } catch (Throwable t) {
+            Ui.toast(a, "無法送到資料包：" + t.getClass().getSimpleName());
+        }
+    }
+
+    private static String dataPackPackage(Activity a) {
+        String[] order = a.getPackageName().endsWith(".lab")
+                ? new String[] { "tw.hoonsor.datapack.lab", "tw.hoonsor.datapack" }
+                : new String[] { "tw.hoonsor.datapack", "tw.hoonsor.datapack.lab" };
+        for (int k = 0; k < order.length; k++) {
+            if (a.getPackageManager().getLaunchIntentForPackage(order[k]) != null) return order[k];
+        }
+        return null;
+    }
+
+    private static Intent build(List<Item> items) {
+        Intent i;
+        if (items.size() == 1) {
+            Item it = items.get(0);
+            i = new Intent(Intent.ACTION_SEND);
+            i.setType(mimeOf(it));
+            i.putExtra(Intent.EXTRA_STREAM, it.uri());
+            i.setClipData(ClipData.newRawUri("", it.uri()));
+        } else {
+            ArrayList<Uri> uris = new ArrayList<Uri>(items.size());
+            boolean anyVideo = false, anyImage = false;
+            for (int k = 0; k < items.size(); k++) {
+                uris.add(items.get(k).uri());
+                if (items.get(k).video) anyVideo = true; else anyImage = true;
+            }
+            i = new Intent(Intent.ACTION_SEND_MULTIPLE);
+            // 混合時用 */*：image/* 會讓部分 App 把影片當成圖片處理
+            i.setType(anyVideo && anyImage ? "*/*" : (anyVideo ? "video/*" : "image/*"));
+            i.putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris);
+            ClipData clip = ClipData.newRawUri("", uris.get(0));
+            for (int k = 1; k < uris.size(); k++) clip.addItem(new ClipData.Item(uris.get(k)));
+            i.setClipData(clip);
+        }
+        i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        return i;
     }
 
     private static String mimeOf(Item it) {

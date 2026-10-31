@@ -17,6 +17,12 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
+    <!-- 只用來判斷賈維斯資料包有沒有安裝（Share.toDataPack），不是權限 -->
+    <queries>
+        <package android:name="tw.hoonsor.datapack" />
+        <package android:name="tw.hoonsor.datapack.lab" />
+    </queries>
+
     <application
         android:label="@string/app_name"
         android:icon="@mipmap/ic_launcher"

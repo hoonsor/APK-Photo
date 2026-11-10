@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.photobox.sorter"
-    android:versionCode="10400"
-    android:versionName="1.4.0">
+    android:versionCode="10500"
+    android:versionName="1.5.0">
 
     <uses-sdk android:minSdkVersion="30" android:targetSdkVersion="34" />
 
@@ -85,5 +85,16 @@
         <receiver
             android:name=".UpdateInstallReceiver"
             android:exported="false" />
+
+        <!-- 每日自動備份（hoonsor-kit android-auto-backup）：寫到 Documents/HoonsorBackup/PhotoBox/（LAB 版 PhotoBox-LAB），
+             Dropsync 同步到 Dropbox。value 要寫完整類別名稱：LAB 版改了套件名，用「.」開頭會找不到類別。
+             沒有加 RECEIVE_BOOT_COMPLETED（新增權限要先問倬）：重開機後排程會消失，下次打開 App 時重排 -->
+        <meta-data
+            android:name="tw.hoonsor.backup.SOURCE"
+            android:value="com.photobox.sorter.PhotoBoxBackupSource" />
+        <service
+            android:name="tw.hoonsor.backup.BackupJobService"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
     </application>
 </manifest>

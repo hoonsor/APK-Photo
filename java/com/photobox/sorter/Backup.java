@@ -4,6 +4,7 @@ import android.app.AlertDialog;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.net.Uri;
+import android.os.Looper;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -14,6 +15,8 @@ import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Map;
+import java.util.TreeMap;
 
 /**
  * 相簿與整理標記的匯出／匯入（JSON，透過系統檔案選擇器存取，不需要任何儲存權限）。
@@ -33,70 +36,123 @@ public final class Backup {
 
     // ---------- 匯出 ----------
 
+    /** 手動匯出（系統檔案選擇器選好的位置）：內容由 {@link #write} 產生，另外記下 last_export 並顯示結果。 */
     public static void exportTo(MainActivity a, Uri uri) {
         OutputStream os = null;
         try {
-            Store s = Store.get();
-            JSONObject root = new JSONObject();
-            root.put("format", FORMAT);
-            root.put("version", VERSION);
-            root.put("app", appVersion(a));
-            root.put("exported", System.currentTimeMillis());
-
-            // 媒體表：相簿與標記都用索引引用，避免重複寫檔名
-            JSONArray media = new JSONArray();
-            final HashMap<Long, Integer> ref = new HashMap<Long, Integer>();
-
-            JSONArray albums = new JSONArray();
-            ArrayList<Albums.Album> list = Albums.get().ordered();
-            int albumCount = 0, itemCount = 0;
-            for (int i = 0; i < list.size(); i++) {
-                Albums.Album al = list.get(i);
-                JSONObject o = new JSONObject();
-                o.put("name", al.name);
-                o.put("kind", al.kind);
-                o.put("created", al.created);
-                JSONArray items = new JSONArray();
-                for (Long id : al.items.keySet()) {
-                    Item it = s.byId.get(id);
-                    if (it == null) continue;   // 已不存在的不匯出
-                    items.put(refOf(it, media, ref));
-                    itemCount++;
-                }
-                o.put("items", items);
-                Item cover = al.cover > 0 ? s.byId.get(al.cover) : null;
-                if (cover != null && al.items.containsKey(al.cover)) o.put("cover", refOf(cover, media, ref));
-                albums.put(o);
-                if (!al.isFav()) albumCount++;
-            }
-            root.put("albums", albums);
-
-            JSONArray states = new JSONArray();
-            for (java.util.Map.Entry<Long, Integer> e : s.state.entrySet()) {
-                Item it = s.byId.get(e.getKey());
-                if (it == null || e.getValue() == Db.STATE_NONE) continue;
-                JSONArray pair = new JSONArray();
-                pair.put(refOf(it, media, ref));
-                pair.put(e.getValue().intValue());
-                states.put(pair);
-            }
-            root.put("states", states);
-            root.put("media", media);
-
             os = a.getContentResolver().openOutputStream(uri, "wt");
             if (os == null) throw new Exception("無法寫入");
-            os.write(root.toString(1).getBytes(StandardCharsets.UTF_8));
-            os.flush();
+            int[] n = write(a, os, true);
             a.getSharedPreferences("photobox", Context.MODE_PRIVATE).edit()
                     .putLong("last_export", System.currentTimeMillis()).apply();
-            Ui.toast(a, "已匯出：" + albumCount + " 本相簿、" + itemCount + " 筆相簿內容、"
-                    + states.length() + " 個整理標記");
+            Ui.toast(a, "已匯出：" + n[0] + " 本相簿、" + n[1] + " 筆相簿內容、"
+                    + n[2] + " 個整理標記");
             if (a.morePage != null) a.morePage.refreshBackupInfo();
         } catch (Throwable t) {
             Ui.toast(a, "匯出失敗：" + t.getMessage());
         } finally {
             if (os != null) try { os.close(); } catch (Throwable ignored) { }
         }
+    }
+
+    /**
+     * 匯出核心：把備份 JSON 寫進 os（不關閉 os）。給每日自動備份（{@link PhotoBoxBackupSource}）用，可在背景執行緒呼叫。
+     *
+     * 不寫 "exported" 時間：自動備份用內容的 SHA-256 判斷「有沒有變」，帶時間的話每天都會多一份一模一樣的備份
+     * （備份時間已經在檔名裡）。匯入不讀這個欄位，所以兩種檔案都能還原。
+     */
+    public static void writeTo(Context c, OutputStream os) throws Exception {
+        write(c, os, false);
+    }
+
+    /** 回傳 {相簿數（不含喜好）, 相簿內容筆數, 整理標記數} */
+    private static int[] write(Context c, OutputStream os, boolean stamp) throws Exception {
+        Snapshot s = snapshot(c);
+        JSONObject root = new JSONObject();
+        root.put("format", FORMAT);
+        root.put("version", VERSION);
+        root.put("app", appVersion(c));
+        if (stamp) root.put("exported", System.currentTimeMillis());
+
+        // 媒體表：相簿與標記都用索引引用，避免重複寫檔名
+        JSONArray media = new JSONArray();
+        final HashMap<Long, Integer> ref = new HashMap<Long, Integer>();
+
+        JSONArray albums = new JSONArray();
+        ArrayList<Albums.Album> list = s.albums;
+        int albumCount = 0, itemCount = 0;
+        for (int i = 0; i < list.size(); i++) {
+            Albums.Album al = list.get(i);
+            JSONObject o = new JSONObject();
+            o.put("name", al.name);
+            o.put("kind", al.kind);
+            o.put("created", al.created);
+            JSONArray items = new JSONArray();
+            for (Long id : al.items.keySet()) {
+                Item it = s.byId.get(id);
+                if (it == null) continue;   // 已不存在的不匯出
+                items.put(refOf(it, media, ref));
+                itemCount++;
+            }
+            o.put("items", items);
+            Item cover = al.cover > 0 ? s.byId.get(al.cover) : null;
+            if (cover != null && al.items.containsKey(al.cover)) o.put("cover", refOf(cover, media, ref));
+            albums.put(o);
+            if (!al.isFav()) albumCount++;
+        }
+        root.put("albums", albums);
+
+        // 依 media id 排序：同樣的資料每次寫出一樣的位元組（HashMap 的順序不保證）
+        JSONArray states = new JSONArray();
+        for (java.util.Map.Entry<Long, Integer> e : new TreeMap<Long, Integer>(s.state).entrySet()) {
+            Item it = s.byId.get(e.getKey());
+            if (it == null || e.getValue() == Db.STATE_NONE) continue;
+            JSONArray pair = new JSONArray();
+            pair.put(refOf(it, media, ref));
+            pair.put(e.getValue().intValue());
+            states.put(pair);
+        }
+        root.put("states", states);
+        root.put("media", media);
+
+        os.write(root.toString(1).getBytes(StandardCharsets.UTF_8));
+        os.flush();
+        return new int[]{ albumCount, itemCount, states.length() };
+    }
+
+    /** 匯出用的資料快照 */
+    private static final class Snapshot {
+        HashMap<Long, Item> byId;
+        Map<Long, Integer> state;
+        ArrayList<Albums.Album> albums;
+    }
+
+    /**
+     * 主執行緒而且 Store 已載入：直接用畫面上的資料（手動匯出，和改版前一樣）。
+     * 其他情況（每日自動備份在背景執行緒、App 可能根本沒開過）：照 Store.load 的方式自己讀一份，
+     * 不碰 Store（Store 只在主執行緒改，背景讀會撞到）。
+     */
+    private static Snapshot snapshot(Context c) throws Exception {
+        Snapshot s = new Snapshot();
+        Store st = Store.get();
+        if (Looper.myLooper() == Looper.getMainLooper() && st.loaded) {
+            s.byId = st.byId;
+            s.state = st.state;
+            s.albums = Albums.get().ordered();
+            return s;
+        }
+        Context app = c.getApplicationContext();
+        // 讀不到完整照片清單時寧可這次失敗，也不要寫出一份「相簿都是空的」備份（只留 7 份，會把好的舊備份擠掉）
+        if (Media.partialOnly(app)) throw new IllegalStateException("只允許存取部分照片，這次不備份（請改成允許全部）");
+        if (!Media.granted(app)) throw new IllegalStateException("沒有相片存取權限，這次不備份");
+        ArrayList<Item> items = Media.query(app, Prefs.showVideo(app));
+        if (items.isEmpty()) throw new IllegalStateException("讀不到照片清單，這次不備份");
+        s.byId = new HashMap<Long, Item>();
+        for (int i = 0; i < items.size(); i++) s.byId.put(items.get(i).id, items.get(i));
+        s.state = Db.get(app).loadStates();
+        s.albums = Albums.read(app);
+        Albums.sortForDisplay(s.albums);
+        return s;
     }
 
     private static int refOf(Item it, JSONArray media, HashMap<Long, Integer> ref) throws Exception {

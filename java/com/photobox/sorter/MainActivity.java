@@ -75,6 +75,8 @@ public class MainActivity extends Activity implements Store.Listener {
         setContentView(frame);
         Store.get().addListener(this);
         autoCheckUpdate();
+        // 每日自動備份：開著而且還沒排就排一個（已排好不會重排）；本 App 沒有 Application 類別，放在這裡
+        try { tw.hoonsor.backup.AutoBackup.ensureScheduled(this); } catch (Throwable ignored) { }
 
         if (!Media.granted(this)) {
             showPermissionScreen();

@@ -41,7 +41,8 @@ export ANDROID_HOME=<Android SDK>   # 或先 bash setup.sh 從 npm 取得工具�
 export SIGNING_KEYSTORE_PATH=... SIGNING_STORE_PASSWORD=... SIGNING_KEY_ALIAS=... SIGNING_KEY_PASSWORD=...
 bash build.sh                       # 正式版 → build/photo-sort-box.apk
 bash build.sh --lab                 # LAB 版 → build/photo-sort-box-lab.apk
-bash tests/run.sh                   # 純邏輯測試（Flow／BackupMatch／Geo／UpdateVersion），不需要 Android
+bash tests/run.sh                   # 純邏輯測試（Flow／BackupMatch／Geo／UpdateVersion／Swipe），不需要 Android；
+                                    # AutoBackupTest 需要 android.jar（ANDROID_HOME），找不到會跳過
 ```
 
 - **工具鏈**：`build.sh` 先找 `../tools`（或 `PB_TOOLS`）的 npm 工具鏈，沒有就用 `ANDROID_HOME` 的 Android SDK
@@ -122,7 +123,9 @@ DragStack          多選照片疊成一疊拖曳（framework drag and drop＋�
 AnnotateView       編輯器畫布：圖形以原圖像素座標儲存、清單快照式復原／重做、render() 輸出
 Swipe              檢視器手勢判斷：鎖定方向、門檻、快速甩動（純 Java，JVM 測試）
 Share              ACTION_SEND(_MULTIPLE)＋ClipData＋讀取授權
-Backup             JSON 匯出／匯入（SAF），還原為合併
+Backup             JSON 匯出／匯入（SAF），還原為合併；writeTo(Context, OutputStream) 是匯出核心（每日自動備份也用它）
+PhotoBoxBackupSource 每日自動備份的內容來源（manifest meta-data tw.hoonsor.backup.SOURCE 指到這裡）
+tw/hoonsor/backup/ AutoBackup＋BackupJobService：hoonsor-kit android-auto-backup 1.0.0（D30），lambda 已改匿名類別（見坑 16）
 BackupMatch        備份項目 ↔ 目前項目的比對（純 Java，JVM 測試）
 Geo                影片 ISO 6709 位置字串解析（純 Java）
 Store            ★ 全 App 共用的照片清單與整理狀態（單例＋Listener），載入時一併載入相簿
@@ -219,9 +222,10 @@ album_items(album_id, media_id, ts, PRIMARY KEY(album_id, media_id))
 | D23 | 編輯器載入時最長邊上限 4096 px，用 ImageDecoder（自動套 EXIF 方向） | 4096×3072 ARGB 約 50MB，存檔還要複製一份，再大容易 OOM | 原尺寸載入；分塊（tile）編輯：複雜度太高 |
 
 | D29 | 「送到資料包」只交讀取授權給賈維斯資料包（`Share.toDataPack`，manifest `<queries>` 判斷有沒有安裝），不在本 App 做 OCR 或連網 | 2026-10-31 倬定案：本 App 無 Gradle、無第三方函式庫，且承諾照片不經網路（D4） | 把 OCR 放進本 App：要重寫建置並打破 D4 |
+| D30 | v1.5.0 每日自動備份用共用模組 hoonsor-kit `android-auto-backup`（`java/tw/hoonsor/backup/`）：JobScheduler 每天把 `Backup.writeTo` 的 JSON 用 MediaStore 寫到 `Documents/HoonsorBackup/PhotoBox/`（LAB 版 `PhotoBox-LAB`，由 `PhotoBoxBackupSource` 依行程名稱判斷），內容沒變不另存、只留 7 份；Dropsync 同步到 Dropbox | 2026-11-10 倬要所有自製 APP 定期備份到 Dropbox，選「APP 存同一資料夾＋Dropsync」；不需新權限、不連網（D4） | 2026-10-10 提案的「SAF 長期授權＋定期覆寫同一檔」：要使用者先選位置、各 APP 做法不一；Drive／Dropbox API：要網路與 OAuth |
 
 **待倬決定（2026-10-10 討論過，尚未回覆）**
-- 定期自動備份到雲端硬碟／Dropbox：建議做法是「SAF 取得長期寫入授權＋JobScheduler 定期覆寫同一檔案」，由雲端 App 負責上傳，本 App 仍不需網路權限。頻率未定。
+- ~~定期自動備份到雲端硬碟／Dropbox~~：2026-11-10 已定案並在 v1.5.0 實作（D30）。
 - 串接 MiniMax M3（國際版，Anthropic 相容 API，支援圖片）判斷待刪照片：需要網路權限，打破 D4。
   選項 (a) 正式版加網路權限、AI 預設關閉；(b) 另出 AI 版；(c) 改做離線的模糊／過暗偵測。
   另需決定 AI 建議是直接進待刪，或先進「AI 建議」清單由倬確認。
@@ -276,6 +280,12 @@ album_items(album_id, media_id, ts, PRIMARY KEY(album_id, media_id))
     舊的 `keystore.p12` 仍要保留（替還沒換裝的手機建置）；v1.2.0 起正式版用共用金鑰。Android 12+ 不同簽章的 APP 宣告同名權限會安裝失敗（日後 Agent API 用 signature 權限時要注意）。
 15. **Agent API 的 signature 權限**：標準 Agent API 用 `protectionLevel="signature"`，大腦 APP 用共用金鑰簽，
     v1.2.0 起本 App 也用共用金鑰，已可互通（倬的手機要先完成一次「備份 → 卸載 → 安裝 → 匯入」換裝）。
+16. **不能用 lambda**：`build.sh` 用 `javac -source 8 -bootclasspath android.jar` 編譯，android.jar 沒有
+    `LambdaMetafactory.metafactory`，lambda 會出現 `Unable to find method metafactory`。一律用匿名類別；
+    從 hoonsor-kit 搬進來的模組（例如 `tw/hoonsor/backup/`）也要先改掉（v1.5.0 踩過）。
+17. **自動備份（D30）在背景執行緒跑、App 可能根本沒開**：`Backup.writeTo` 不能假設 `Store` 已載入，
+    非主執行緒時自己讀 MediaStore／DB（`Backup.snapshot`）；讀不到完整照片清單就丟例外讓這次失敗，
+    不要寫出空備份（只留 7 份，會把好的舊備份擠掉）。自動備份檔不寫 `exported` 時間，否則「內容沒變不另存」失效。
 
 ## 8. 倬的偏好
 

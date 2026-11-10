@@ -8,7 +8,7 @@
 
 | 項目 | 內容 |
 |---|---|
-| 版本 | **v1.4.0**（versionCode 10400），2026-11-03 合進 main（`latest` 測試版就是這版，尚未推 tag） |
+| 版本 | **v1.5.0**（versionCode 10500），2026-11-10 在分支 `feat/auto-backup`（未合進 main、未推 tag）；main 上是 v1.4.0（2026-11-03，`latest` 測試版，尚未推 tag） |
 | 套件 | `com.photobox.sorter`（LAB：`com.photobox.sorter.lab`） |
 | 支援 | Android 11（API 30）以上，targetSdk 34 |
 | 建置 | aapt2＋ecj／javac＋d8＋apksigner（純 Android Framework，無 AndroidX，不用 Gradle），見 `AGENTS.md` 第 3 節；GitHub Actions 自動發布 |
@@ -37,7 +37,7 @@
 - [x] 「整理」分頁併入照片檢視：上滑待刪（10 秒復原）、下滑編輯、放大時拖曳；照片編輯器（v1.3.0，2026-10-26）
 - [ ] Agent API（`describe`／`execute`／`health`）——全部動作規劃中，見 `docs/AGENT_API.md`
 - [x] 改用共用簽章 `hoonsor-release.jks`＋GitHub Actions 建置發布、App 內更新（v1.2.0，2026-10-18）
-- [ ] 定期自動備份到雲端硬碟／Dropbox（等倬決定）
+- [x] 每日自動備份到 `Documents/HoonsorBackup/PhotoBox/`，Dropsync 同步到 Dropbox（v1.5.0，2026-11-10，hoonsor-kit android-auto-backup；待實機驗證）
 - [ ] AI（MiniMax M3）輔助判斷待刪照片（等倬決定）
 - [ ] 健康檢查頁、備份改 zip 格式與「分享備份檔」（倬 APP 標準要求，尚未做）
 
@@ -47,6 +47,7 @@ commit 欄：2026-10-13 之前沒有 git，標「—」。
 
 | 版本 | 日期 | commit | 變更 | 為什麼 |
 |---|---|---|---|---|
+| v1.5.0 | 2026-11-10 | （本次，分支 feat/auto-backup） | 每日自動備份：共用模組 `tw/hoonsor/backup`（hoonsor-kit android-auto-backup 1.0.0，JobScheduler＋MediaStore，不需新權限）每天把「匯出備份檔」的同一份 JSON 存到 `Documents/HoonsorBackup/PhotoBox/`（LAB 版 `PhotoBox-LAB`），內容沒變不另存、只留 7 份；更多 → 備份與還原 新增開關、上次備份、立即備份、說明；`Backup.writeTo` 抽出匯出核心 | 倬要所有自製 APP 定期備份到 Dropbox，選方案一（APP 存到同一資料夾＋Dropsync）；取代 2026-10-10 待決定的「SAF＋定期覆寫」方案 |
 | v1.4.0 | 2026-11-03 | b72b72d | 單張檢視與多選可「送到賈維斯資料包」（只交讀取授權，本 App 仍不上傳；只送照片，LAB 版優先送 LAB 版資料包） | 倬要拍的名片、健檢報告能進資料包給語音總控查 |
 | v1.3.0 | 2026-10-26 | ad637e0、16c3046＋本次提交（倬第一、二輪回饋） | 移除整理分頁；單張檢視沒放大時上滑待刪（10 秒復原列）、下滑編輯，放大時滑動是拖曳；新增照片編輯器（畫筆、螢光筆、方框、圓框、箭頭、文字，另存新照片） | 倬要在看照片時就能整理，不必切分頁 |
 | v1.2.0 | 2026-10-18 | 8263833 | 共用簽章＋GitHub Actions 發布；App 內更新（新增 INTERNET、REQUEST_INSTALL_PACKAGES 權限，只用於更新） | 倬要手機不接線就能更新；Agent API 需要共用簽章 |
@@ -76,6 +77,11 @@ commit 欄：2026-10-13 之前沒有 git，標「—」。
 從倬的截圖與回報看得出已經可以用的：v1.1.1 起的多選、左側相簿欄、雙指縮放；v1.1.6 的往右滑進入相簿整理。
 其餘只通過編譯與邏輯測試：
 
+- [ ] v1.5.0 更多 → 備份與還原 →「立即備份」後，`Documents/HoonsorBackup/PhotoBox/` 出現 `PhotoBox-yyyyMMdd-HHmm.json`，狀態列顯示上次備份時間
+- [ ] v1.5.0 再按一次「立即備份」會另存一份（強制）；每日自動備份在內容沒變時不另存，但狀態列時間會更新
+- [ ] v1.5.0 用「從備份檔還原」選自動備份的 .json 能還原（自動備份檔沒有 `exported` 欄位，匯入本來就不讀它）
+- [ ] v1.5.0 隔天確認 App 沒開也有自動備份（ColorOS 可能延後）；關掉開關後不再產生新檔；超過 7 份會刪掉最舊的
+- [ ] v1.5.0 LAB 版寫到 `PhotoBox-LAB` 資料夾，不跟正式版混在一起；Dropsync 有把 `Documents/HoonsorBackup` 同步到 Dropbox
 - [ ] v1.4.0 單張與多選「送到賈維斯資料包」：已裝資料包時直接開資料包；沒裝時提示；選到影片只送照片
 - [ ] v1.3.0 沒放大時：左右滑換張、上滑加入待刪並跳下一張、下滑開編輯器；拖曳中照片跟著手指、中間有提示
 - [ ] v1.3.0 放大後（雙指或點兩下）上下左右滑都只是拖曳，不換張、不觸發動作；縮回後恢復
@@ -106,10 +112,12 @@ commit 欄：2026-10-13 之前沒有 git，標「—」。
 - 系統垃圾桶只能清除本 App 送進去的項目（平台限制）
 - 倬的手機還是 v1.1.8（舊金鑰），要做一次「備份 → 卸載 → 安裝 v1.2.0 → 匯入」才能開始用 App 內更新
 - 備份格式是單一 JSON，不是標準要求的 zip，也還沒有「分享備份檔」與「匯入前自動備份」
+- 自動備份（v1.5.0）沒有加 `RECEIVE_BOOT_COMPLETED`（新增權限要先問倬）：手機重開機後排程會消失，下次打開 App 才重排；倬同意後在 manifest 加這個權限即可（模組偵測到就會 `setPersisted`）
+- 自動備份在「只允許部分照片」或沒有相片權限時會失敗並在狀態列顯示原因（刻意不寫出相簿是空的備份，免得把好的舊備份擠掉）
 
 ## 下一步
 
-1. **等倬決定**：自動備份頻率；AI 判斷待刪的做法（a 正式版加網路權限／b 另出 AI 版／c 離線模糊偵測）與 AI 建議放哪裡。
+1. **等倬決定**：AI 判斷待刪的做法（a 正式版加網路權限／b 另出 AI 版／c 離線模糊偵測）與 AI 建議放哪裡。
 2. ~~推 `v1.2.0` tag 發布~~（2026-10-18 已發布；2026-10-25 確認 Release APK 的簽章 SHA-256 `514ec00e…` 與語音總控 v0.3.0 相同，是共用金鑰）。倬在手機上換裝（先在 App 內匯出備份 → 卸載 → 安裝 v1.2.0 → 匯入），並實測一次 App 內更新。
 3. ~~推 `v1.3.0` tag 發布正式版~~（2026-10-27 倬實機測過三輪回饋後同意發布）。最後一版的相簿欄跟手拖曳若手感要調，改 `BrowsePage.sideDragEnd()` 的門檻與 `settleSide()` 的時間。
    （語音總控說明書的 `sort_start` 一節已在 2026-10-26 改成「打開照片檢視逐張整理」，合進 APK-VoiceHub main，commit 2e32b9b。）
@@ -118,11 +126,13 @@ commit 欄：2026-10-13 之前沒有 git，標「—」。
 6. 備份補齊標準四件套（zip、分享、存檔、匯入前自動備份）與健康檢查頁。
 7. 編輯器建議（未確認）：裁切、旋轉、編輯時雙指放大看細節、覆蓋原檔選項。
 8. 原功能待辦見下方「功能待辦」。
+9. **v1.5.0 每日自動備份（2026-11-10 新增，優先）**：檢視分支 `feat/auto-backup`（worktree `D:\dev\APK-Photo-backup`）→ 合進 main（合併前打 `pre-merge-v1.5.0`）→ 倬實機驗證上方「待實機驗證」的 v1.5.0 各項 → 推 `v1.5.0` tag；倬決定要不要加 `RECEIVE_BOOT_COMPLETED`（重開機後仍保留排程）。
 
 ## 交接紀錄
 
 | 日期 | 電腦 | 完成 | 決定＋原因 | 放棄＋原因 | 未完成 | 下一步 | 環境注意事項 |
 |---|---|---|---|---|---|---|---|
+| 2026-11-10 | A（推定：本機有 D:\dev 與 jbr-21.0.11） | v1.5.0 每日自動備份（分支 `feat/auto-backup`，worktree `D:\dev\APK-Photo-backup`）：放入 hoonsor-kit android-auto-backup 1.0.0（`java/tw/hoonsor/backup/`）、`PhotoBoxBackupSource`、`Backup.writeTo`、更多頁自動備份卡、`tests/AutoBackupTest.java`；`tests/run.sh` 全過；`build.sh` 正式版與 LAB 版都建置成功（臨時金鑰簽章，只驗證能編譯，APK 不發布） | 名稱用 PhotoBox（與套件、備份格式、資料庫一致），LAB 版依行程名稱改用 `PhotoBox-LAB`（本專案沒有 BuildConfig）；模組兩個檔的 lambda 改成匿名類別（`javac -bootclasspath android.jar` 沒有 LambdaMetafactory，lambda 編不過）；自動備份不寫 `exported` 時間、整理標記依 id 排序（讓「內容沒變不另存」有效）；背景執行時自己讀 MediaStore／DB，不碰主執行緒的 Store；讀不到完整照片清單就讓這次失敗 | 加 `RECEIVE_BOOT_COMPLETED`（新增權限要先問倬）；改 build.sh 讓 lambda 能編（改建置方式要先問倬） | 合併、實機驗證、推 tag | 見上方「下一步」第 9 項 | 本機建置：`ANDROID_HOME=%LOCALAPPDATA%\Android\Sdk`（build-tools 36.0.0、platforms android-35）、JDK `C:/Users/hoonsor/.jdks/jbr-21.0.11`、用 Git Bash 執行；`tests/run.sh` 的 AutoBackupTest 需要 android.jar（ANDROID_HOME），找不到會跳過 |
 | 2026-11-03 | A（家裡） | 把 `feat/send-to-datapack` 快轉合併進 main，版本改 v1.4.0 | 不另加權限、不連網，只用 `<queries>` 判斷資料包有沒有裝；先發 `latest` 測試版，等倬實機測過再推 tag | — | 實機驗證、推 v1.4.0 tag | 見上方「下一步」第 4 項 | 合併前打了 tag `pre-merge-v1.4.0`（指向 88750b0），可回滾 |
 | 2026-10-27 | A（家裡） | 發布 v1.3.0 正式版（含三輪回饋：待刪照片不在左右滑範圍、⋮ 拿掉保留、編輯器捲動工具列＋粗細滑桿＋馬賽克、相簿欄跟手拖曳） | 倬實機測過後同意發布 | — | 相簿欄跟手拖曳（45c224f）是否已實機測過，待倬確認 | 見上方「下一步」 | 無 |
 | 2026-10-26 | A（家裡） | v1.3.0：整理分頁併入單張檢視（上滑待刪＋10 秒復原、下滑編輯、放大時拖曳）、照片編輯器、手勢說明改成固定、資料夾長按與月份標題改為逐張整理 | 倬要求合併；待刪分頁保留（倬：不然不知道去哪裡丟垃圾桶）；編輯另存新照片不覆蓋（D22）；手勢改固定（D21） | 保留整理分頁、手勢可自訂、覆蓋原檔 | 實機驗證、推 v1.3.0 tag、語音總控說明書 sort_start 一節 | 見上方「下一步」第 3 項 | 刪掉的 SortPage／Card／SortStartDialog／StartPickActivity 移到 `_trash/20261026/`（已加入 .gitignore，只在 A 電腦），也可從 tag v1.2.0 找回 |
@@ -133,6 +143,18 @@ commit 欄：2026-10-13 之前沒有 git，標「—」。
 | 2026-10-13 | A（家裡） | 補齊 AGENTS.md、README、docs/AGENT_API、manifest；第一次推上 `hoonsor/APK-Photo`；build.sh 改讀 `PB_KS_PASS` | 金鑰與密碼不進 repo（repo 公開）；repo 根目錄＝原 photobox 內容；程式暫不搬到 dev/APK-Photo（不用 Gradle） | 立即換共用簽章（要卸載重裝） | Agent API、共用簽章 | 見上方「下一步」 | 建置前要把 keystore.p12 放到專案根目錄並設定 PB_KS_PASS |
 
 ## 版本詳細紀錄（每版做了什麼、為什麼）
+
+### v1.5.0 — 2026-11-10
+**每天自動備份相簿與整理進度，搭配 Dropsync 就有 Dropbox 雲端備份。**
+
+為什麼：倬要所有自製 APP 定期備份到 Dropbox；選定的做法是每個 APP 都把備份檔存到手機的同一個資料夾，再由 Dropsync 一次同步。本 App 仍然不需要網路權限，也沒有新增任何權限。
+
+- 更多 → 備份與還原 新增「每天自動備份」（預設開啟）：每天把和「匯出備份檔」相同的內容（相簿、喜好項目、已保留／待刪標記，不含照片本身）存到 `Documents/HoonsorBackup/PhotoBox/`，檔名 `PhotoBox-年月日-時分.json`。
+- 內容沒變就不另存一份；只留最近 7 份，更舊的自動刪掉（只刪這裡自動產生的檔，手動匯出的檔不會碰）。
+- 「立即備份」按鈕可以隨時手動備份一份；狀態列顯示上次備份時間，失敗時顯示原因。
+- 還原照舊：按「從備份檔還原」，選資料夾裡最新的 .json 檔，還原方式是合併。
+- LAB 版存到 `PhotoBox-LAB` 資料夾，不跟正式版混在一起。
+- 沒有相片權限或只允許部分照片時，這次自動備份會失敗並顯示原因，不會寫出一份「相簿都是空的」備份把好的舊備份擠掉。
 
 ### v1.3.0 — 2026-10-26
 **「整理」分頁併進照片檢視，並新增照片編輯器。**

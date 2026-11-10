@@ -93,13 +93,18 @@ public final class Albums {
     /** 顯示順序：喜好項目永遠第一，其餘依建立時間新到舊。 */
     public ArrayList<Album> ordered() {
         ArrayList<Album> out = new ArrayList<Album>(list);
+        sortForDisplay(out);
+        return out;
+    }
+
+    /** 依顯示順序排序（給背景備份用 read() 讀出的清單，排出和 ordered() 一樣的順序）。 */
+    public static void sortForDisplay(ArrayList<Album> out) {
         Collections.sort(out, new Comparator<Album>() {
             @Override public int compare(Album x, Album y) {
                 if (x.isFav() != y.isFav()) return x.isFav() ? -1 : 1;
                 return Long.compare(y.created, x.created);
             }
         });
-        return out;
     }
 
     /** 不含喜好項目的一般相簿（給「加入相簿」選單用時，喜好另外處理）。 */

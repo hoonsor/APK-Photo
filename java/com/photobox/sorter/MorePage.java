@@ -5,11 +5,13 @@ import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.BaseAdapter;
+import android.widget.CompoundButton;
 import android.widget.FrameLayout;
 import android.widget.GridView;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
+import android.widget.Switch;
 import android.widget.TextView;
 
 import java.text.SimpleDateFormat;
@@ -17,6 +19,8 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Locale;
+
+import tw.hoonsor.backup.AutoBackup;
 
 /**
  * 「更多」分頁，也是左上 ☰ 選單的內容：資料夾、重複／相似照片、備份與還原、設定、說明。
@@ -29,6 +33,7 @@ public class MorePage extends Page {
     private FrameLayout holder;
     private int sub = SUB_MENU;
     private TextView backupInfo;
+    private TextView autoStatus;
 
     public MorePage(MainActivity a) { super(a); }
 
@@ -64,7 +69,7 @@ public class MorePage extends Page {
                 a.startActivity(new Intent(a, DupActivity.class));
             }
         }), Ui.lpW());
-        container.addView(menuRow(Icons.BACKUP, "備份與還原", "相簿與整理進度存成檔案，換手機或重裝也不怕", go(SUB_BACKUP, fromDrawer)), Ui.lpW());
+        container.addView(menuRow(Icons.BACKUP, "備份與還原", "相簿與整理進度存成檔案、每天自動備份，換手機或重裝也不怕", go(SUB_BACKUP, fromDrawer)), Ui.lpW());
         container.addView(Ui.divider(a));
         container.addView(menuRow(Icons.SLIDERS, "設定", "手勢說明、影片、刪除方式、App 更新", go(SUB_SETTINGS, fromDrawer)), Ui.lpW());
         container.addView(menuRow(Icons.HELP, "說明", "相簿與資料夾的差別、常見問題", go(SUB_HELP, fromDrawer)), Ui.lpW());
@@ -313,13 +318,72 @@ public class MorePage extends Page {
         c2.addView(para("還原是「合併」：同名相簿會把內容併在一起，不會刪掉你現在已有的相簿。"
                 + "照片是用檔名、大小、拍攝時間比對的，所以換手機後只要照片有一起搬過去就對得上。"), Ui.lpW());
         col.addView(c2, Ui.lpW());
+        col.addView(Ui.space(a, 14));
+        col.addView(buildAutoBackup(), Ui.lpW());
         refreshBackupInfo();
 
         sv.addView(col, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         return sv;
     }
 
+    /** 每日自動備份（hoonsor-kit android-auto-backup）：開關、上次備份、立即備份、說明 */
+    private View buildAutoBackup() {
+        LinearLayout c = card();
+        LinearLayout row = Ui.rowH(a);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams tlp = Ui.lpWeight();
+        tlp.rightMargin = Ui.dp(a, 12);
+        row.addView(Ui.tv(a, "每天自動備份", 16f, T.TEXT, true), tlp);
+        Switch sw = new Switch(a);
+        sw.setChecked(AutoBackup.isEnabled(a));
+        sw.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override public void onCheckedChanged(CompoundButton b, boolean on) {
+                AutoBackup.setEnabled(a, on);
+                refreshBackupInfo();
+            }
+        });
+        row.addView(sw);
+        c.addView(row, Ui.lpW());
+        c.addView(Ui.space(a, 6));
+        autoStatus = Ui.tv(a, "", 13f, T.FAINT, false);
+        autoStatus.setLineSpacing(Ui.dp(a, 3), 1f);
+        c.addView(autoStatus, Ui.lpW());
+        c.addView(Ui.space(a, 12));
+
+        final TextView now = Ui.btnGhost(a, "立即備份", T.PRIMARY);
+        now.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                if (!now.isEnabled()) return;
+                now.setEnabled(false);
+                now.setText("備份中…");
+                AutoBackup.runNowAsync(a, new AutoBackup.Callback() {
+                    @Override public void onDone(final String err) {
+                        a.runOnUiThread(new Runnable() {
+                            @Override public void run() {
+                                now.setEnabled(true);
+                                now.setText("立即備份");
+                                Ui.toast(a, err == null ? "已備份到 " + AutoBackup.folder(new PhotoBoxBackupSource())
+                                        : "備份失敗：" + err);
+                                refreshBackupInfo();
+                            }
+                        });
+                    }
+                });
+            }
+        });
+        c.addView(now, Ui.lpW());
+        c.addView(Ui.space(a, 12));
+        c.addView(para("每天自動把上面「匯出備份檔」的同一份內容（相簿與整理標記，不含照片本身）存到手機的 "
+                + AutoBackup.folder(new PhotoBoxBackupSource()) + "，"
+                + "再用 Dropsync 把 Documents/HoonsorBackup 同步到 Dropbox，就有雲端備份。\n\n"
+                + "內容沒變就不另存一份；只留最近 " + AutoBackup.KEEP + " 份，更舊的會自動刪掉（只刪這裡自動產生的檔）。"
+                + "電量低時會延後，手機也可能晚幾小時才跑，需要時按「立即備份」。\n\n"
+                + "還原：按上面的「從備份檔還原」，選這個資料夾裡最新的 .json 檔。"), Ui.lpW());
+        return c;
+    }
+
     public void refreshBackupInfo() {
+        if (autoStatus != null) autoStatus.setText(AutoBackup.statusText(a));
         if (backupInfo == null) return;
         int albums = Albums.get().normal().size();
         Albums.Album fav = Albums.get().favorites();
